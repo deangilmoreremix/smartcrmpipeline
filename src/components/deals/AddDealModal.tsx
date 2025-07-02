@@ -5,10 +5,47 @@ import { useOpenAI } from '../../services/openaiService';
 import { useGeminiAI } from '../../services/geminiService';
 import { Deal } from '../../types';
 import { Contact } from '../../types/contact';
-import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles, Zap, Brain, UserPlus, UserX } from 'lucide-react';
+import { 
+  X, 
+  Save, 
+  Bot, 
+  Search, 
+  Users, 
+  Building, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  DollarSign, 
+  Target, 
+  AlertCircle, 
+  Sparkles, 
+  Zap, 
+  Brain, 
+  UserPlus, 
+  UserX,
+  RefreshCw,
+  Camera,
+  FileText,
+  Heart,
+  Star,
+  Briefcase,
+  Tag,
+  Globe,
+  Plus,
+  Database,
+  SlidersHorizontal,
+  AlignRight,
+  CheckCircle,
+  Loader2
+} from 'lucide-react';
 import SelectContactModal from './SelectContactModal';
 import { useContactStore } from '../../store/contactStore';
 import AddContactModal from './AddContactModal';
+import { ModernButton } from '../ui/ModernButton';
+import { AIAutoFillButton } from '../ui/AIAutoFillButton';
+import { AIResearchButton } from '../ui/AIResearchButton';
+import { ContactEnrichmentData } from '../../services/aiEnrichmentService';
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -47,14 +84,29 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     contact: '',
     contactId: '',
     contactAvatar: '',
+    companyAvatar: '', // New field
     value: 0,
     stage: 'qualification' as Deal['stage'],
     probability: 50,
     priority: 'medium' as Deal['priority'],
     dueDate: '',
     notes: '',
-    tags: [] as string[]
+    tags: [] as string[],
+    isFavorite: false, // New field
+    customFields: {} as Record<string, string | number | boolean>, // New field
+    socialProfiles: { // New field
+      linkedin: '',
+      twitter: '',
+      website: '',
+      facebook: ''
+    },
+    lastEnrichment: undefined as Deal['lastEnrichment'] // New field
   });
+
+  // New tag and custom field states
+  const [newTag, setNewTag] = useState('');
+  const [newCustomField, setNewCustomField] = useState({ name: '', value: '' });
+  const [showCustomFields, setShowCustomFields] = useState(false);
 
   // Contact details state
   const [contactDetails, setContactDetails] = useState<ContactDetails>({
@@ -89,13 +141,15 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
   // AI state
   const [isResearching, setIsResearching] = useState(false);
+  const [isResearchingContact, setIsResearchingContact] = useState(false);
+  const [isSearchingImage, setIsSearchingImage] = useState(false);
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [researchResults, setResearchResults] = useState<any>(null);
   const [aiProvider, setAiProvider] = useState<string>('');
   
   // UI state
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'company' | 'ai'>('basic');
-  const [newTag, setNewTag] = useState('');
+  const [isEnriched, setIsEnriched] = useState(false);
   const [researchPriority, setResearchPriority] = useState<'speed' | 'quality' | 'cost'>('quality');
 
   // Services
@@ -104,6 +158,13 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
   const geminiService = useGeminiAI();
   const intelligentAI = new IntelligentAIService(openaiService, geminiService);
 
+  // Load contacts when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchContacts();
+    }
+  }, [isOpen, fetchContacts]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -111,7 +172,9 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       ...formData,
       dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
       // Use the selected contact's avatar if available, otherwise use a default
-      contactAvatar: selectedContact?.avatarSrc || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2'
+      contactAvatar: selectedContact?.avatarSrc || formData.contactAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + formData.contact,
+      // Use the company avatar if available, otherwise generate one
+      companyAvatar: formData.companyAvatar || `https://api.dicebear.com/7.x/initials/svg?seed=${formData.company}&backgroundColor=3b82f6&textColor=ffffff`
     };
 
     onSave(dealData);
@@ -126,13 +189,23 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       contact: '',
       contactId: '',
       contactAvatar: '',
+      companyAvatar: '',
       value: 0,
       stage: 'qualification',
       probability: 50,
       priority: 'medium',
       dueDate: '',
       notes: '',
-      tags: []
+      tags: [],
+      isFavorite: false,
+      customFields: {},
+      socialProfiles: {
+        linkedin: '',
+        twitter: '',
+        website: '',
+        facebook: ''
+      },
+      lastEnrichment: undefined
     });
     setContactDetails({
       name: '',
@@ -160,6 +233,10 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     setAiProvider('');
     setActiveTab('basic');
     setSelectedContact(null);
+    setIsEnriched(false);
+    setShowCustomFields(false);
+    setNewTag('');
+    setNewCustomField({ name: '', value: '' });
   };
 
   const handleAIResearch = async () => {
@@ -205,8 +282,22 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       setFormData(prev => ({
         ...prev,
         title: `${companyData.potentialNeeds?.[0] || 'Business Solution'} for ${companyData.name}`,
-        notes: `Company research completed using ${companyData.aiProvider}. ${companyData.description}`
+        notes: `Company research completed using ${companyData.aiProvider}. ${companyData.description}`,
+        companyAvatar: companyData.logoUrl,
+        industry: companyData.industry,
+        socialProfiles: {
+          ...prev.socialProfiles,
+          website: companyData.website,
+          linkedin: `https://linkedin.com/company/${companyData.name.toLowerCase().replace(/\s+/g, '-')}`,
+        },
+        lastEnrichment: {
+          confidence: 85,
+          aiProvider: companyData.aiProvider,
+          timestamp: new Date()
+        }
       }));
+
+      setIsEnriched(true);
 
     } catch (error) {
       console.error('❌ AI research failed:', error);
@@ -223,7 +314,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       return;
     }
 
-    setIsResearching(true);
+    setIsResearchingContact(true);
     try {
       console.log(`👤 Starting contact research for ${contactDetails.name}`);
       
@@ -231,7 +322,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       
       setContactDetails(prev => ({
         ...prev,
-        title: contactData.title,
+        title: contactData.title || prev.title,
         email: contactData.email || prev.email,
         phone: contactData.phone || prev.phone,
         department: contactData.department || prev.department,
@@ -242,17 +333,40 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       // Update main form contact
       setFormData(prev => ({
         ...prev,
-        contact: contactDetails.name
+        contact: contactDetails.name,
+        contactAvatar: contactData.imageUrl
       }));
 
     } catch (error) {
       console.error('❌ Contact research failed:', error);
     } finally {
-      setIsResearching(false);
+      setIsResearchingContact(false);
     }
   };
 
-  const handleSelectContact = (contact: Contact) => {
+  const handleFindCompanyImage = async () => {
+    if (!formData.company || isSearchingImage) return;
+    
+    setIsSearchingImage(true);
+    try {
+      // Simulated image search
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const newSeed = Date.now().toString();
+      const newAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${newSeed}&backgroundColor=3b82f6&textColor=ffffff`;
+      
+      setFormData(prev => ({
+        ...prev,
+        companyAvatar: newAvatar
+      }));
+    } catch (error) {
+      console.error('Failed to find company image:', error);
+    } finally {
+      setIsSearchingImage(false);
+    }
+  };
+
+  const handleSelectContact = async (contact: Contact) => {
     setSelectedContact(contact);
     setFormData(prev => ({
       ...prev,
@@ -265,7 +379,11 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     if (!formData.company && contact.company) {
       setFormData(prev => ({
         ...prev,
-        company: contact.company
+        company: contact.company,
+        socialProfiles: {
+          ...prev.socialProfiles,
+          ...(contact.socialProfiles || {})
+        }
       }));
     }
     
@@ -279,6 +397,8 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       linkedin: contact.socialProfiles?.linkedin || '',
       notes: contact.notes || ''
     });
+    
+    setShowContactSelector(false);
   };
 
   const handleContactCreated = (contact: Contact) => {
@@ -313,23 +433,82 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     }));
   };
 
+  const handleAddCustomField = () => {
+    if (newCustomField.name && newCustomField.value) {
+      setFormData(prev => ({
+        ...prev,
+        customFields: {
+          ...prev.customFields,
+          [newCustomField.name]: newCustomField.value
+        }
+      }));
+      setNewCustomField({ name: '', value: '' });
+    }
+  };
+  
+  const handleRemoveCustomField = (fieldName: string) => {
+    setFormData(prev => {
+      const newCustomFields = { ...prev.customFields };
+      delete newCustomFields[fieldName];
+      return {
+        ...prev,
+        customFields: newCustomFields
+      };
+    });
+  };
+
+  const toggleFavorite = () => {
+    setFormData(prev => ({
+      ...prev,
+      isFavorite: !prev.isFavorite
+    }));
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center">
-            <Target className="w-6 h-6 mr-2 text-blue-600" />
-            Create New Deal
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl text-white">
+              <Target className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                Create New Deal
+                <Sparkles className="w-5 h-5 ml-2 text-yellow-500" />
+              </h2>
+              <p className="text-gray-600">Add a new deal with AI-powered research</p>
+            </div>
+          </div>
+          
+          {/* AI Quick Actions */}
+          <div className="flex items-center space-x-3">
+            <AIAutoFillButton
+              formData={formData}
+              onAutoFill={(enrichmentData) => {
+                // Handle deal enrichment
+                setFormData(prev => ({
+                  ...prev,
+                  lastEnrichment: {
+                    confidence: enrichmentData.confidence || 75,
+                    aiProvider: enrichmentData.aiProvider || 'AI Assistant',
+                    timestamp: new Date()
+                  }
+                }));
+              }}
+              size="sm"
+            />
+            
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -363,7 +542,23 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
           <form onSubmit={handleSubmit}>
             {/* Basic Deal Information */}
             {activeTab === 'basic' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {isEnriched && (
+                  <div className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-purple-600" />
+                      <span className="text-sm font-medium text-purple-900">
+                        Enhanced with AI Research
+                      </span>
+                      {formData.lastEnrichment && (
+                        <span className="text-xs text-purple-600">
+                          ({formData.lastEnrichment.confidence}% confidence)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -374,23 +569,54 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       required
                       value={formData.title}
                       onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., Enterprise Software License"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Company *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.company}
-                      onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., TechCorp Inc."
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Company *
+                      </label>
+                      <button 
+                        type="button" 
+                        onClick={handleFindCompanyImage}
+                        disabled={isSearchingImage || !formData.company}
+                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center disabled:opacity-50 disabled:text-gray-400"
+                      >
+                        {isSearchingImage ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            <span>Finding image...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="w-3 h-3 mr-1" />
+                            <span>Find logo</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex space-x-2 items-center">
+                      {formData.companyAvatar && (
+                        <div className="relative flex-shrink-0">
+                          <img 
+                            src={formData.companyAvatar} 
+                            alt={formData.company}
+                            className="h-9 w-9 rounded-md object-cover border border-gray-200"
+                          />
+                        </div>
+                      )}
+                      <input
+                        type="text"
+                        required
+                        value={formData.company}
+                        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
+                        className="flex-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., TechCorp Inc."
+                      />
+                    </div>
                   </div>
 
                   {/* Contact Person Selector */}
@@ -401,12 +627,16 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     <div className="flex space-x-2 items-center">
                       {formData.contact ? (
                         <div className="flex-1 flex items-center space-x-2 border border-blue-200 bg-blue-50 rounded-lg p-2">
-                          {selectedContact?.avatarSrc && (
+                          {formData.contactAvatar ? (
                             <img 
-                              src={selectedContact.avatarSrc} 
+                              src={formData.contactAvatar} 
                               alt={formData.contact}
                               className="w-8 h-8 rounded-full object-cover border border-blue-200"
                             />
+                          ) : (
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                              <User className="w-4 h-4" />
+                            </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-blue-700 font-medium truncate">{formData.contact}</p>
@@ -427,7 +657,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                           type="text"
                           value={formData.contact}
                           onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., John Smith"
                           readOnly
                         />
@@ -463,7 +693,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="number"
                         value={formData.value}
                         onChange={(e) => setFormData(prev => ({ ...prev, value: Number(e.target.value) }))}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="0"
                       />
                     </div>
@@ -476,7 +706,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     <select
                       value={formData.stage}
                       onChange={(e) => setFormData(prev => ({ ...prev, stage: e.target.value as Deal['stage'] }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="qualification">Qualification</option>
                       <option value="proposal">Proposal</option>
@@ -508,7 +738,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     <select
                       value={formData.priority}
                       onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as Deal['priority'] }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="high">High</option>
                       <option value="medium">Medium</option>
@@ -526,7 +756,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="date"
                         value={formData.dueDate}
                         onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -560,7 +790,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
                       placeholder="Add tag"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                     />
                     <button
@@ -572,6 +802,204 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     </button>
                   </div>
                 </div>
+                
+                {/* Custom Fields */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-gray-900 flex items-center">
+                      <Database className="w-4 h-4 mr-2 text-purple-500" />
+                      Custom Fields
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomFields(!showCustomFields)}
+                      className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Custom Field</span>
+                    </button>
+                  </div>
+                  
+                  {/* Existing Custom Fields */}
+                  {Object.keys(formData.customFields).length > 0 && (
+                    <div className="space-y-3 mb-3">
+                      {Object.entries(formData.customFields).map(([fieldName, fieldValue]) => (
+                        <div key={fieldName} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-1 grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs text-gray-500 uppercase tracking-wide font-medium">Field Name</label>
+                              <p className="text-sm font-medium text-gray-900">{fieldName}</p>
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500 uppercase tracking-wide font-medium">Value</label>
+                              <p className="text-sm text-gray-700">{String(fieldValue)}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomField(fieldName)}
+                            className="p-1 text-red-400 hover:text-red-600 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Add New Custom Field */}
+                  {showCustomFields && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <input
+                          type="text"
+                          placeholder="Field name"
+                          value={newCustomField.name}
+                          onChange={(e) => setNewCustomField(prev => ({ ...prev, name: e.target.value }))}
+                          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Field value"
+                          value={newCustomField.value}
+                          onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
+                          className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex space-x-3">
+                        <ModernButton 
+                          type="button"
+                          variant="primary" 
+                          size="sm" 
+                          onClick={handleAddCustomField}
+                          disabled={!newCustomField.name || !newCustomField.value}
+                        >
+                          Add Field
+                        </ModernButton>
+                        <ModernButton 
+                          type="button"
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setShowCustomFields(false)}
+                        >
+                          Cancel
+                        </ModernButton>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Social Profiles */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center">
+                    <Globe className="w-4 h-4 mr-2 text-blue-500" />
+                    Company Social Profiles
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <div className="bg-blue-500 p-1 rounded mr-2">
+                          <Linkedin className="w-3 h-3 text-white" />
+                        </div>
+                        LinkedIn
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.socialProfiles.linkedin}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          socialProfiles: {
+                            ...prev.socialProfiles,
+                            linkedin: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://linkedin.com/company/example"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <div className="bg-purple-500 p-1 rounded mr-2">
+                          <Globe className="w-3 h-3 text-white" />
+                        </div>
+                        Website
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.socialProfiles.website}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          socialProfiles: {
+                            ...prev.socialProfiles,
+                            website: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://example.com"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <div className="bg-blue-400 p-1 rounded mr-2">
+                          <Twitter className="w-3 h-3 text-white" />
+                        </div>
+                        Twitter
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.socialProfiles.twitter}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          socialProfiles: {
+                            ...prev.socialProfiles,
+                            twitter: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://twitter.com/example"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                        <div className="bg-blue-700 p-1 rounded mr-2">
+                          <Facebook className="w-3 h-3 text-white" />
+                        </div>
+                        Facebook
+                      </label>
+                      <input
+                        type="url"
+                        value={formData.socialProfiles.facebook}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          socialProfiles: {
+                            ...prev.socialProfiles,
+                            facebook: e.target.value
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="https://facebook.com/example"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Favorite Toggle */}
+                <div className="pt-2">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isFavorite}
+                      onChange={toggleFavorite}
+                      className="text-red-600 rounded"
+                    />
+                    <Heart className={`w-5 h-5 ${formData.isFavorite ? 'text-red-500 fill-current' : 'text-gray-400'}`} />
+                    <span className="text-sm font-medium text-gray-700">Add to Favorites</span>
+                  </label>
+                </div>
 
                 {/* Notes */}
                 <div>
@@ -582,7 +1010,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     value={formData.notes}
                     onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Additional notes about this deal..."
                   />
                 </div>
@@ -619,11 +1047,20 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     <button
                       type="button"
                       onClick={handleContactResearch}
-                      disabled={isResearching || !contactDetails.name}
+                      disabled={isResearchingContact || !contactDetails.name}
                       className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      <Search className="w-4 h-4" />
-                      <span>{isResearching ? 'Researching...' : 'AI Research'}</span>
+                      {isResearchingContact ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          <span>Researching...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          <span>AI Research</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -685,7 +1122,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="text"
                         value={contactDetails.name}
                         onChange={(e) => setContactDetails(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="e.g., John Smith"
                       />
                     </div>
@@ -698,7 +1135,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="text"
                         value={contactDetails.title}
                         onChange={(e) => setContactDetails(prev => ({ ...prev, title: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="e.g., VP of Sales"
                       />
                     </div>
@@ -713,7 +1150,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                           type="email"
                           value={contactDetails.email}
                           onChange={(e) => setContactDetails(prev => ({ ...prev, email: e.target.value }))}
-                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="john.smith@company.com"
                         />
                       </div>
@@ -729,7 +1166,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                           type="tel"
                           value={contactDetails.phone}
                           onChange={(e) => setContactDetails(prev => ({ ...prev, phone: e.target.value }))}
-                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="+1 (555) 123-4567"
                         />
                       </div>
@@ -743,7 +1180,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="text"
                         value={contactDetails.department}
                         onChange={(e) => setContactDetails(prev => ({ ...prev, department: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="e.g., Sales"
                       />
                     </div>
@@ -756,7 +1193,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="url"
                         value={contactDetails.linkedin}
                         onChange={(e) => setContactDetails(prev => ({ ...prev, linkedin: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="https://linkedin.com/in/john-smith"
                       />
                     </div>
@@ -777,7 +1214,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     readOnly={!!selectedContact}
                     rows={3}
                     className={`w-full px-3 py-2 border border-gray-300 rounded-lg ${
-                      selectedContact ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                      selectedContact ? 'bg-gray-50' : 'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
                     }`}
                     placeholder="Notes about this contact..."
                   />
@@ -793,6 +1230,28 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
             {/* Company Details */}
             {activeTab === 'company' && (
               <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Company Information</h3>
+                  <button 
+                    type="button"
+                    onClick={handleAIResearch}
+                    disabled={isResearching || !formData.company}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isResearching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        <span>Researching...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-1" />
+                        <span>Research Company</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -802,7 +1261,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       type="text"
                       value={companyDetails.industry}
                       onChange={(e) => setCompanyDetails(prev => ({ ...prev, industry: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., Technology"
                     />
                   </div>
@@ -815,7 +1274,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       type="url"
                       value={companyDetails.website}
                       onChange={(e) => setCompanyDetails(prev => ({ ...prev, website: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="https://company.com"
                     />
                   </div>
@@ -830,7 +1289,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                         type="text"
                         value={companyDetails.headquarters}
                         onChange={(e) => setCompanyDetails(prev => ({ ...prev, headquarters: e.target.value }))}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="San Francisco, CA"
                       />
                     </div>
@@ -844,7 +1303,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       type="text"
                       value={companyDetails.employees}
                       onChange={(e) => setCompanyDetails(prev => ({ ...prev, employees: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., 50-200"
                     />
                   </div>
@@ -857,7 +1316,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                       type="text"
                       value={companyDetails.revenue}
                       onChange={(e) => setCompanyDetails(prev => ({ ...prev, revenue: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="e.g., $10M-50M"
                     />
                   </div>
@@ -871,7 +1330,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     value={companyDetails.description}
                     onChange={(e) => setCompanyDetails(prev => ({ ...prev, description: e.target.value }))}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Brief description of the company..."
                   />
                 </div>
@@ -904,6 +1363,39 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                           {need}
                         </span>
                       ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Competitors */}
+                {companyDetails.competitors.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Main Competitors
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {companyDetails.competitors.map((competitor, index) => (
+                        <span key={index} className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full">
+                          {competitor}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Company Research Status */}
+                {researchResults && (
+                  <div className="p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200 mt-4">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-900">
+                        Company research completed
+                      </span>
+                      {aiProvider && (
+                        <span className="text-xs text-green-600 font-medium">
+                          via {aiProvider}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1030,20 +1522,27 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
         {/* Footer */}
         <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Save className="w-4 h-4" />
-            <span>Create Deal</span>
-          </button>
+          <div className="flex items-center space-x-2 text-sm text-gray-600">
+            <Brain className="w-4 h-4 text-purple-500" />
+            <span>Powered by OpenAI & Gemini AI</span>
+          </div>
+          
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Save className="w-4 h-4" />
+              <span>Create Deal</span>
+            </button>
+          </div>
         </div>
 
         {/* Contact Selection Modal */}
