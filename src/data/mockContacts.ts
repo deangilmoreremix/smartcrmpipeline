@@ -24,7 +24,8 @@ export const mockContacts: Contact[] = [
     sources: ['LinkedIn', 'Webinar'],
     socialProfiles: {
       linkedin: 'https://linkedin.com/in/sarah-johnson',
-      email: 'sarah.johnson@techcorp.com'
+      email: 'sarah.johnson@techcorp.com',
+      website: 'https://techcorp.com'
     },
     customFields: {
       'Annual Revenue': '$50M',
@@ -49,6 +50,13 @@ export const mockContacts: Contact[] = [
       achievements: ['first-deal', 'deal-streak-5'],
       monthlyGoal: 50000,
       monthlyProgress: 32000
+    },
+    tags: ['enterprise', 'technical', 'decision-maker'],
+    isFavorite: true,
+    lastEnrichment: {
+      confidence: 92,
+      aiProvider: 'OpenAI GPT-4o',
+      timestamp: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000)
     }
   },
   {
@@ -67,11 +75,13 @@ export const mockContacts: Contact[] = [
     sources: ['Referral', 'Website'],
     socialProfiles: {
       linkedin: 'https://linkedin.com/in/michael-chen',
-      twitter: 'https://twitter.com/mchen'
+      twitter: 'https://twitter.com/mchen',
+      website: 'https://innovate.io'
     },
     customFields: {
       'Company Size': '200-500',
-      'Budget': '$100K-500K'
+      'Budget': '$100K-500K',
+      'Contract Renewal': '2025-06-15'
     },
     notes: 'Existing customer looking to expand usage. Interested in additional modules.',
     aiScore: 78,
@@ -91,6 +101,13 @@ export const mockContacts: Contact[] = [
       achievements: ['first-deal', 'deal-streak-5', 'revenue-milestone-100k', 'pipeline-master'],
       monthlyGoal: 100000,
       monthlyProgress: 78000
+    },
+    tags: ['upsell', 'expansion', 'SaaS'],
+    isFavorite: true,
+    lastEnrichment: {
+      confidence: 82,
+      aiProvider: 'Gemini 1.5 Pro',
+      timestamp: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
     }
   },
   {
@@ -109,17 +126,20 @@ export const mockContacts: Contact[] = [
     sources: ['Cold Call', 'Email'],
     socialProfiles: {
       linkedin: 'https://linkedin.com/in/emily-rodriguez',
-      website: 'https://startupxyz.com'
+      website: 'https://startupxyz.com',
+      twitter: 'https://twitter.com/emilyr'
     },
     customFields: {
       'Funding Stage': 'Series A',
-      'Team Size': '25'
+      'Team Size': '25',
+      'Founded': '2021'
     },
     notes: 'Early-stage startup. May not have budget currently but good long-term prospect.',
     aiScore: 45,
     lastConnected: '3 weeks ago',
     createdAt: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(today.getTime() - 8 * 24 * 60 * 60 * 1000)
+    updatedAt: new Date(today.getTime() - 8 * 24 * 60 * 60 * 1000),
+    tags: ['startup', 'early-stage', 'fintech']
   },
   {
     id: 'contact-4',
@@ -136,11 +156,13 @@ export const mockContacts: Contact[] = [
     interestLevel: 'hot',
     sources: ['LinkedIn', 'Conference'],
     socialProfiles: {
-      linkedin: 'https://linkedin.com/in/david-kumar'
+      linkedin: 'https://linkedin.com/in/david-kumar',
+      email: 'david.kumar@enterprise.com'
     },
     customFields: {
       'Industry': 'Manufacturing',
-      'Location': 'Chicago'
+      'Location': 'Chicago',
+      'Purchase Authority': 'Full'
     },
     notes: 'Met at industry conference. Very interested in automation solutions.',
     aiScore: 85,
@@ -160,6 +182,13 @@ export const mockContacts: Contact[] = [
       achievements: ['first-deal'],
       monthlyGoal: 50000,
       monthlyProgress: 18000
+    },
+    tags: ['manufacturing', 'automation', 'high-interest'],
+    isFavorite: false,
+    lastEnrichment: {
+      confidence: 85,
+      aiProvider: 'OpenAI GPT-4o',
+      timestamp: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000)
     }
   },
   {
@@ -177,17 +206,20 @@ export const mockContacts: Contact[] = [
     interestLevel: 'cold',
     sources: ['Email', 'Typeform'],
     socialProfiles: {
-      email: 'lisa.thompson@consulting.com'
+      email: 'lisa.thompson@consulting.com',
+      linkedin: 'https://linkedin.com/in/lisa-thompson'
     },
     customFields: {
       'Previous Customer': 'Yes',
-      'Churn Reason': 'Budget cuts'
+      'Churn Reason': 'Budget cuts',
+      'Reactivation Potential': 'Medium'
     },
     notes: 'Former customer who churned due to budget constraints. May return when budget improves.',
     aiScore: 25,
     lastConnected: '3 months ago',
     createdAt: new Date(today.getTime() - 120 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000)
+    updatedAt: new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000),
+    tags: ['churned', 'budget-cuts', 'reactivation']
   },
   {
     id: 'contact-6',
@@ -205,17 +237,21 @@ export const mockContacts: Contact[] = [
     sources: ['Website', 'Facebook'],
     socialProfiles: {
       linkedin: 'https://linkedin.com/in/james-wilson',
-      facebook: 'https://facebook.com/jameswilson'
+      facebook: 'https://facebook.com/jameswilson',
+      website: 'https://bigcorp.com'
     },
     customFields: {
       'Company Size': '1000+',
-      'IT Budget': '$1M+'
+      'IT Budget': '$1M+',
+      'Current Software': 'Legacy ERP'
     },
     notes: 'Large enterprise with significant IT budget. Multiple stakeholders involved in decision.',
     aiScore: 67,
     lastConnected: '1 week ago',
     createdAt: new Date(today.getTime() - 15 * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000)
+    updatedAt: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000),
+    tags: ['enterprise', 'IT', 'multiple-stakeholders'],
+    isFavorite: false
   },
   {
     id: 'contact-7',
@@ -232,11 +268,14 @@ export const mockContacts: Contact[] = [
     interestLevel: 'hot',
     sources: ['LinkedIn', 'Referral'],
     socialProfiles: {
-      linkedin: 'https://linkedin.com/in/alex-rivera'
+      linkedin: 'https://linkedin.com/in/alex-rivera',
+      twitter: 'https://twitter.com/alexrivera',
+      website: 'https://techstart.com'
     },
     customFields: {
       'Years Experience': '8',
-      'Team Size': '15'
+      'Team Size': '15',
+      'Sales Tools': 'HubSpot, Outreach'
     },
     notes: 'Experienced sales manager interested in our CRM platform.',
     aiScore: 88,
@@ -256,6 +295,13 @@ export const mockContacts: Contact[] = [
       achievements: ['first-deal', 'deal-streak-5', 'revenue-milestone-100k'],
       monthlyGoal: 50000,
       monthlyProgress: 45000
+    },
+    tags: ['CRM', 'sales', 'referral'],
+    isFavorite: true,
+    lastEnrichment: {
+      confidence: 88,
+      aiProvider: 'Hybrid AI',
+      timestamp: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000)
     }
   }
 ];

@@ -34,8 +34,18 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
     updatedAt: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     contactAvatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=TechCorp&backgroundColor=3b82f6&textColor=ffffff',
     lastActivity: 'Discovery call completed',
-    tags: ['enterprise', 'hot-lead']
+    tags: ['enterprise', 'hot-lead'],
+    isFavorite: true,
+    customFields: {
+      'Deal Source': 'Website',
+      'Account Manager': 'Alex Rivera'
+    },
+    socialProfiles: {
+      linkedin: 'https://linkedin.com/company/techcorp-inc',
+      website: 'https://techcorp-inc.com'
+    }
   },
   'deal-2': {
     id: 'deal-2',
@@ -52,8 +62,23 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
     updatedAt: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     contactAvatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=StartupXYZ&backgroundColor=8b5cf6&textColor=ffffff',
     lastActivity: 'Proposal submitted',
-    tags: ['startup', 'marketing']
+    tags: ['startup', 'marketing'],
+    isFavorite: false,
+    customFields: {
+      'Deal Source': 'Referral',
+      'Expected Revenue': '$25,000 ARR'
+    },
+    socialProfiles: {
+      linkedin: 'https://linkedin.com/company/startupxyz',
+      twitter: 'https://twitter.com/startupxyz'
+    },
+    lastEnrichment: {
+      confidence: 75,
+      aiProvider: 'OpenAI GPT-4o',
+      timestamp: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000)
+    }
   },
   'deal-3': {
     id: 'deal-3',
@@ -70,8 +95,23 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 20 * 24 * 60 * 60 * 1000), // 20 days ago
     updatedAt: today,
     contactAvatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=EnterpriseCorp&backgroundColor=10b981&textColor=ffffff',
     lastActivity: 'Contract review in progress',
-    tags: ['enterprise', 'cloud', 'high-value']
+    tags: ['enterprise', 'cloud', 'high-value'],
+    customFields: {
+      'Deal Source': 'Conference',
+      'Decision Maker': 'CTO',
+      'Implementation Timeline': '3 months'
+    },
+    socialProfiles: {
+      linkedin: 'https://linkedin.com/company/enterprise-corp',
+      website: 'https://enterprise-corp.com'
+    },
+    lastEnrichment: {
+      confidence: 85,
+      aiProvider: 'Gemini 1.5 Pro',
+      timestamp: new Date()
+    }
   },
   'deal-4': {
     id: 'deal-4',
@@ -88,8 +128,15 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
     updatedAt: new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     contactAvatar: 'https://images.pexels.com/photos/1040880/pexels-photo-1040880.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=Innovate&backgroundColor=f59e0b&textColor=ffffff',
     lastActivity: 'Technical demo scheduled',
-    tags: ['saas', 'integration']
+    tags: ['saas', 'integration'],
+    isFavorite: false,
+    customFields: {
+      'Deal Source': 'LinkedIn',
+      'Integration Type': 'API',
+      'Technical Contact': 'John Dev'
+    }
   },
   'deal-5': {
     id: 'deal-5',
@@ -106,8 +153,25 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
     updatedAt: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000), // Yesterday
     contactAvatar: 'https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=BigCorp&backgroundColor=ef4444&textColor=ffffff',
     lastActivity: 'Contract signed',
-    tags: ['analytics', 'closed']
+    tags: ['analytics', 'closed'],
+    isFavorite: true,
+    customFields: {
+      'Deal Source': 'Partner Referral',
+      'Implementation Start': 'Next Month',
+      'Success Manager': 'Lisa Thompson'
+    },
+    socialProfiles: {
+      linkedin: 'https://linkedin.com/company/bigcorp',
+      website: 'https://bigcorp.com',
+      twitter: 'https://twitter.com/bigcorp'
+    },
+    lastEnrichment: {
+      confidence: 95,
+      aiProvider: 'Hybrid AI',
+      timestamp: new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000)
+    }
   },
   'deal-6': {
     id: 'deal-6',
@@ -124,8 +188,14 @@ export const mockDeals: Record<string, Deal> = {
     createdAt: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     updatedAt: new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     contactAvatar: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2',
+    companyAvatar: 'https://api.dicebear.com/7.x/initials/svg?seed=TechStart&backgroundColor=3b82f6&textColor=ffffff',
     lastActivity: 'Follow-up call scheduled',
-    tags: ['mobile', 'development']
+    tags: ['mobile', 'development'],
+    customFields: {
+      'Deal Source': 'Website Form',
+      'App Platform': 'iOS & Android',
+      'Timeline': '4 months'
+    }
   }
 };
 
