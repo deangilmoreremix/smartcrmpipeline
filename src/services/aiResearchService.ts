@@ -1,5 +1,6 @@
 import { useOpenAI } from './openaiService';
 import { useGeminiAI } from './geminiService';
+import { IntelligentAIService } from './intelligentAIService';
 
 interface CompanyResearchData {
   name: string;
@@ -25,6 +26,7 @@ interface CompanyResearchData {
   potentialNeeds: string[];
   salesApproach: string;
   keyDecisionMakers: string[];
+  aiProvider: string; // Track which AI was used
 }
 
 interface ContactPersonData {
@@ -41,24 +43,33 @@ interface ContactPersonData {
   valueProposition: string;
   communicationStyle: string;
   iceBreakers: string[];
+  aiProvider: string; // Track which AI was used
 }
 
 interface AIResearchService {
-  researchCompany: (companyName: string, domain?: string) => Promise<CompanyResearchData>;
-  findContactPerson: (personName: string, companyName?: string) => Promise<ContactPersonData>;
+  researchCompany: (companyName: string, domain?: string, priority?: 'speed' | 'quality' | 'cost') => Promise<CompanyResearchData>;
+  findContactPerson: (personName: string, companyName?: string, priority?: 'speed' | 'quality' | 'cost') => Promise<ContactPersonData>;
   findCompanyLogo: (companyName: string, domain?: string) => Promise<string>;
   findPersonImage: (personName: string, company?: string, title?: string) => Promise<string>;
-  enhanceWithAI: (data: any, query: string, useGemini?: boolean) => Promise<any>;
+  enhanceWithAI: (data: any, query: string, priority?: 'speed' | 'quality' | 'cost') => Promise<any>;
+  getTaskRouting: () => any[];
 }
 
 class EnhancedAIResearchService implements AIResearchService {
-  private openaiService = useOpenAI();
-  private geminiService = useGeminiAI();
+  private intelligentAI: IntelligentAIService;
 
-  async researchCompany(companyName: string, domain?: string): Promise<CompanyResearchData> {
+  constructor() {
+    const openaiService = useOpenAI();
+    const geminiService = useGeminiAI();
+    this.intelligentAI = new IntelligentAIService(openaiService, geminiService);
+  }
+
+  async researchCompany(companyName: string, domain?: string, priority: 'speed' | 'quality' | 'cost' = 'quality'): Promise<CompanyResearchData> {
     try {
-      // Use Gemini for company research
-      const geminiResearch = await this.geminiService.researchCompany(companyName, domain);
+      console.log(`🔍 Company Research: ${companyName} (Priority: ${priority})`);
+      
+      // Use intelligent AI routing for company research
+      const geminiResearch = await this.intelligentAI.researchCompany(companyName, domain, priority);
       
       // Enhance with mock data for completeness
       const enhancedData: CompanyResearchData = {
@@ -83,20 +94,23 @@ class EnhancedAIResearchService implements AIResearchService {
         logoUrl: await this.findCompanyLogo(companyName, domain),
         potentialNeeds: geminiResearch.potentialNeeds || ['Digital transformation', 'Process optimization', 'Growth acceleration'],
         salesApproach: geminiResearch.salesApproach || 'Value-focused approach with ROI demonstration',
-        keyDecisionMakers: geminiResearch.keyDecisionMakers || ['CEO', 'CTO', 'VP Operations']
+        keyDecisionMakers: geminiResearch.keyDecisionMakers || ['CEO', 'CTO', 'VP Operations'],
+        aiProvider: '🧠 Gemini AI' // Gemini is preferred for company research
       };
 
       return enhancedData;
     } catch (error) {
-      console.error('AI company research failed, using mock data:', error);
+      console.error('❌ AI company research failed, using mock data:', error);
       return this.generateMockCompanyData(companyName, domain);
     }
   }
 
-  async findContactPerson(personName: string, companyName?: string): Promise<ContactPersonData> {
+  async findContactPerson(personName: string, companyName?: string, priority: 'speed' | 'quality' | 'cost' = 'speed'): Promise<ContactPersonData> {
     try {
-      // Use Gemini for contact research
-      const geminiData = await this.geminiService.findContactInfo(personName, companyName);
+      console.log(`👤 Contact Research: ${personName} at ${companyName || 'Unknown Company'} (Priority: ${priority})`);
+      
+      // Use intelligent AI routing for contact research (optimized for speed)
+      const geminiData = await this.intelligentAI.researchContact(personName, companyName, priority);
       
       const names = personName.split(' ');
       const firstName = names[0];
@@ -115,10 +129,11 @@ class EnhancedAIResearchService implements AIResearchService {
         contactStrategy: geminiData.contactStrategy || 'Professional outreach with value proposition',
         valueProposition: geminiData.valueProposition || 'Solutions that drive business efficiency and growth',
         communicationStyle: geminiData.communicationStyle || 'Professional and consultative approach',
-        iceBreakers: geminiData.iceBreakers || ['Industry trends', 'Business challenges', 'Technology solutions']
+        iceBreakers: geminiData.iceBreakers || ['Industry trends', 'Business challenges', 'Technology solutions'],
+        aiProvider: '⚡ Gemini Flash' // Gemini Flash is preferred for fast contact research
       };
     } catch (error) {
-      console.error('AI contact research failed, using mock data:', error);
+      console.error('❌ AI contact research failed, using mock data:', error);
       return this.generateMockContactData(personName, companyName);
     }
   }
@@ -141,29 +156,23 @@ class EnhancedAIResearchService implements AIResearchService {
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=3b82f6,8b5cf6,f59e0b,10b981,ef4444`;
   }
 
-  async enhanceWithAI(data: any, query: string, useGemini: boolean = true): Promise<any> {
+  async enhanceWithAI(data: any, query: string, priority: 'speed' | 'quality' | 'cost' = 'quality'): Promise<any> {
     try {
-      if (useGemini) {
-        // Use Gemini for enhancement
-        const insights = await this.geminiService.getInsights(data);
-        return {
-          ...data,
-          enhanced: true,
-          aiInsights: insights,
-          enhancedBy: 'Gemini AI'
-        };
-      } else {
-        // Use OpenAI for enhancement
-        const insights = await this.openaiService.getInsights(data);
-        return {
-          ...data,
-          enhanced: true,
-          aiInsights: insights,
-          enhancedBy: 'OpenAI'
-        };
-      }
+      console.log(`✨ AI Enhancement: ${query} (Priority: ${priority})`);
+      
+      // Use intelligent routing for insights (OpenAI preferred for creative insights)
+      const insights = await this.intelligentAI.getInsights(data, priority);
+      
+      return {
+        ...data,
+        enhanced: true,
+        aiInsights: insights,
+        enhancedBy: priority === 'speed' ? '⚡ Gemini Flash' : 
+                   priority === 'cost' ? '💎 Gemma 2B' : 
+                   '🤖 GPT-4o' // OpenAI preferred for high-quality insights
+      };
     } catch (error) {
-      console.error('AI enhancement failed:', error);
+      console.error('❌ AI enhancement failed:', error);
       return {
         ...data,
         enhanced: false,
@@ -171,6 +180,10 @@ class EnhancedAIResearchService implements AIResearchService {
         enhancedBy: 'Fallback'
       };
     }
+  }
+
+  getTaskRouting() {
+    return this.intelligentAI.getTaskRouting();
   }
 
   // Helper methods for generating realistic mock data
@@ -197,7 +210,8 @@ class EnhancedAIResearchService implements AIResearchService {
       logoUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${companyName}&backgroundColor=3b82f6&textColor=ffffff`,
       potentialNeeds: ['Digital transformation', 'Process optimization', 'Cost reduction'],
       salesApproach: 'Consultative selling with focus on ROI',
-      keyDecisionMakers: ['CEO', 'CTO', 'VP of Operations']
+      keyDecisionMakers: ['CEO', 'CTO', 'VP of Operations'],
+      aiProvider: '🔄 Fallback Mode'
     };
   }
 
@@ -219,10 +233,12 @@ class EnhancedAIResearchService implements AIResearchService {
       contactStrategy: 'Professional outreach with value proposition',
       valueProposition: 'Solutions that drive business growth',
       communicationStyle: 'Professional and consultative',
-      iceBreakers: ['Industry trends', 'Business challenges', 'Technology solutions']
+      iceBreakers: ['Industry trends', 'Business challenges', 'Technology solutions'],
+      aiProvider: '🔄 Fallback Mode'
     };
   }
 
+  // Generate helper methods (keeping existing implementation)
   private generateIndustry(companyName: string): string {
     const industries = [
       'Technology', 'Healthcare', 'Finance', 'Manufacturing', 'Retail',

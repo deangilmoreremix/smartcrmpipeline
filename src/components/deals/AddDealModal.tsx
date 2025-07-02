@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { useAIResearch } from '../../services/aiResearchService';
+import { IntelligentAIService } from '../../services/intelligentAIService';
 import { useOpenAI } from '../../services/openaiService';
 import { useGeminiAI } from '../../services/geminiService';
-import { ModelSelector } from '../ui/ModelSelector';
-import { getDefaultModel } from '../../config/aiModels';
 import { Deal } from '../../types';
-import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles } from 'lucide-react';
+import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles, Zap, Brain } from 'lucide-react';
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -80,16 +79,18 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
   const [isResearching, setIsResearching] = useState(false);
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [researchResults, setResearchResults] = useState<any>(null);
-  const [selectedAiModel, setSelectedAiModel] = useState(getDefaultModel('gemini').id);
+  const [aiProvider, setAiProvider] = useState<string>('');
   
   // UI state
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'company' | 'ai'>('basic');
   const [newTag, setNewTag] = useState('');
+  const [researchPriority, setResearchPriority] = useState<'speed' | 'quality' | 'cost'>('quality');
 
   // Services
   const aiResearch = useAIResearch();
   const openaiService = useOpenAI();
   const geminiService = useGeminiAI();
+  const intelligentAI = new IntelligentAIService(openaiService, geminiService);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +142,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     });
     setAiInsights([]);
     setResearchResults(null);
+    setAiProvider('');
     setActiveTab('basic');
   };
 
@@ -152,8 +154,10 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
     setIsResearching(true);
     try {
-      // Research company using AI with selected model
-      const companyData = await aiResearch.researchCompany(formData.company);
+      console.log(`🚀 Starting AI research for ${formData.company} (Priority: ${researchPriority})`);
+      
+      // Use intelligent AI routing for company research
+      const companyData = await aiResearch.researchCompany(formData.company, undefined, researchPriority);
       
       // Update company details
       setCompanyDetails({
@@ -169,33 +173,29 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
         competitors: companyData.competitors || []
       });
 
-      // Generate AI insights using selected model
-      let insights: string[] = [];
+      // Generate AI insights using intelligent routing
       const mockContact = {
         name: formData.company,
         company: formData.company,
         industry: companyData.industry
       } as any;
       
-      if (selectedAiModel.startsWith('gpt-') || selectedAiModel.includes('openai')) {
-        insights = await openaiService.getInsights(mockContact);
-      } else {
-        insights = await geminiService.getInsights(mockContact, selectedAiModel);
-      }
-
+      const insights = await intelligentAI.getInsights(mockContact, researchPriority);
       setAiInsights(insights);
       setResearchResults(companyData);
+      setAiProvider(companyData.aiProvider);
       
       // Auto-populate some form fields
       setFormData(prev => ({
         ...prev,
         title: `${companyData.potentialNeeds?.[0] || 'Business Solution'} for ${companyData.name}`,
-        notes: `Company research completed using ${selectedAiModel}. ${companyData.description}`
+        notes: `Company research completed using ${companyData.aiProvider}. ${companyData.description}`
       }));
 
     } catch (error) {
-      console.error('AI research failed:', error);
+      console.error('❌ AI research failed:', error);
       setAiInsights(['AI research failed. Please try again or enter details manually.']);
+      setAiProvider('❌ Research Failed');
     } finally {
       setIsResearching(false);
     }
@@ -209,7 +209,9 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
     setIsResearching(true);
     try {
-      const contactData = await aiResearch.findContactPerson(contactDetails.name, formData.company);
+      console.log(`👤 Starting contact research for ${contactDetails.name}`);
+      
+      const contactData = await aiResearch.findContactPerson(contactDetails.name, formData.company, 'speed');
       
       setContactDetails(prev => ({
         ...prev,
@@ -218,7 +220,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
         phone: contactData.phone || prev.phone,
         department: contactData.department || prev.department,
         linkedin: contactData.linkedin || prev.linkedin,
-        notes: `${contactData.background}. Contact strategy: ${contactData.contactStrategy}`
+        notes: `${contactData.background}. Contact strategy: ${contactData.contactStrategy} (${contactData.aiProvider})`
       }));
 
       // Update main form contact
@@ -228,7 +230,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       }));
 
     } catch (error) {
-      console.error('Contact research failed:', error);
+      console.error('❌ Contact research failed:', error);
     } finally {
       setIsResearching(false);
     }
@@ -489,7 +491,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     type="button"
                     onClick={handleContactResearch}
                     disabled={isResearching || !contactDetails.name}
-                    className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     <Search className="w-4 h-4" />
                     <span>{isResearching ? 'Researching...' : 'AI Research'}</span>
@@ -723,7 +725,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                     <Sparkles className="w-5 h-5 mr-2 text-purple-500" />
-                    AI-Powered Research
+                    Intelligent AI Research
                   </h3>
                   <button
                     type="button"
@@ -736,17 +738,59 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                   </button>
                 </div>
 
-                {/* Model Selector */}
+                {/* Research Priority Selector */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select AI Model for Research
+                    Research Priority (Auto-selects best AI model)
                   </label>
-                  <ModelSelector
-                    selectedModel={selectedAiModel}
-                    onModelChange={setSelectedAiModel}
-                    provider="all"
-                    showDescription={true}
-                  />
+                  <div className="flex space-x-4">
+                    {[
+                      { id: 'speed', label: 'Speed', icon: Zap, desc: 'Fast results with Gemini Flash' },
+                      { id: 'quality', label: 'Quality', icon: Brain, desc: 'Best insights with Gemini Pro' },
+                      { id: 'cost', label: 'Cost', icon: DollarSign, desc: 'Efficient with Gemma 2B' }
+                    ].map(option => {
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setResearchPriority(option.id as any)}
+                          className={`flex-1 p-3 border rounded-lg text-center transition-all duration-200 ${
+                            researchPriority === option.id
+                              ? 'border-blue-500 bg-blue-50 text-blue-700'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5 mx-auto mb-1" />
+                          <p className="font-medium text-sm">{option.label}</p>
+                          <p className="text-xs text-gray-500 mt-1">{option.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* AI Routing Information */}
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
+                  <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
+                    <Brain className="w-5 h-5 mr-2" />
+                    Intelligent AI Routing
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-2">
+                      <p><strong>🧠 Company Research:</strong> Gemini Pro (Best for factual analysis)</p>
+                      <p><strong>👤 Contact Research:</strong> Gemini Flash (Fast contact data)</p>
+                      <p><strong>✉️ Email Generation:</strong> OpenAI GPT-4o (Creative writing)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p><strong>📊 Deal Analysis:</strong> Gemma 27B (Structured insights)</p>
+                      <p><strong>🎯 Next Actions:</strong> Gemma 9B (Actionable steps)</p>
+                      <p><strong>💡 Insights:</strong> OpenAI GPT-4o (Pattern recognition)</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-blue-700 mt-3">
+                    🤖 The system automatically chooses the best AI model for each task based on performance data.
+                  </p>
                 </div>
 
                 {isResearching && (
@@ -760,7 +804,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                   <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
                     <h4 className="font-semibold text-purple-900 mb-3 flex items-center">
                       <Bot className="w-5 h-5 mr-2" />
-                      AI Insights ({selectedAiModel})
+                      AI Insights {aiProvider && `(${aiProvider})`}
                     </h4>
                     <ul className="space-y-2">
                       {aiInsights.map((insight, index) => (
@@ -775,7 +819,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
                 {researchResults && (
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">Research Summary</h4>
+                    <h4 className="font-semibold text-gray-900">Research Summary {aiProvider && `(${aiProvider})`}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-gray-50 rounded-lg p-3">
                         <h5 className="font-medium text-gray-700 mb-2">Company Profile</h5>
