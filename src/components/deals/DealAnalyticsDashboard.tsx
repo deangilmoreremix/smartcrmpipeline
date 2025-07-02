@@ -23,7 +23,8 @@ import {
   PieChart as PieChartIcon,
   Users,
   Building2,
-  Layers
+  Layers,
+  User as UserIcon
 } from 'lucide-react';
 
 interface DealAnalyticsDashboardProps {
@@ -550,7 +551,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
             <div className="space-y-3">
               <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-100">
                 <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-blue-900">{deal.contact || 'Primary Contact'}</p>
@@ -563,7 +564,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
               
               <div className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">Technical Lead</p>
@@ -576,7 +577,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
               
               <div className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">Financial Approver</p>
@@ -599,7 +600,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
             <div className="space-y-3">
               <div className="flex items-center p-3 bg-green-50 rounded-lg border border-green-100">
                 <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center text-green-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-green-900">Account Owner</p>
@@ -612,7 +613,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
               
               <div className="flex items-center p-3 bg-green-50 rounded-lg border border-green-100">
                 <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center text-green-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-green-900">Solutions Architect</p>
@@ -625,7 +626,7 @@ export const DealAnalyticsDashboard: React.FC<DealAnalyticsDashboardProps> = ({ 
               
               <div className="flex items-center p-3 bg-yellow-50 rounded-lg border border-yellow-100">
                 <div className="w-10 h-10 bg-yellow-200 rounded-full flex items-center justify-center text-yellow-700 mr-3">
-                  <User className="w-5 h-5" />
+                  <UserIcon className="w-5 h-5" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium text-yellow-900">Legal Counsel</p>
