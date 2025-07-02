@@ -37,7 +37,11 @@ import {
   SlidersHorizontal,
   AlignRight,
   CheckCircle,
-  Loader2
+  Loader2,
+  Linkedin,
+  Twitter,
+  Facebook,
+  User
 } from 'lucide-react';
 import SelectContactModal from './SelectContactModal';
 import { useContactStore } from '../../store/contactStore';
