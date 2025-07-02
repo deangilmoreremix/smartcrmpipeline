@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { validateAPIConfig } from '../../config/apiConfig';
-import { CheckCircle, XCircle, AlertCircle, Settings, Wifi, WifiOff } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Settings, Wifi, WifiOff, Brain } from 'lucide-react';
 
 export const APIStatusIndicator: React.FC = () => {
   const [status, setStatus] = useState<{ configured: string[]; missing: string[] }>({ configured: [], missing: [] });
@@ -30,14 +30,14 @@ export const APIStatusIndicator: React.FC = () => {
           `}
         >
           {allConfigured ? (
-            <Wifi className="w-4 h-4" />
+            <Brain className="w-4 h-4" />
           ) : someConfigured ? (
             <AlertCircle className="w-4 h-4" />
           ) : (
             <WifiOff className="w-4 h-4" />
           )}
           <span className="text-sm font-medium">
-            API Status
+            AI Models
           </span>
         </button>
 
@@ -46,8 +46,8 @@ export const APIStatusIndicator: React.FC = () => {
           <div className="absolute bottom-full left-0 mb-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900 flex items-center">
-                <Settings className="w-4 h-4 mr-2" />
-                API Configuration Status
+                <Brain className="w-4 h-4 mr-2" />
+                AI Models Status
               </h3>
               <button
                 onClick={() => setIsExpanded(false)}
@@ -62,13 +62,17 @@ export const APIStatusIndicator: React.FC = () => {
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-green-700 mb-2 flex items-center">
                   <CheckCircle className="w-4 h-4 mr-1" />
-                  Configured ({status.configured.length})
+                  Active Models ({status.configured.length})
                 </h4>
                 <div className="space-y-1">
                   {status.configured.map(api => (
                     <div key={api} className="flex items-center text-sm text-green-600">
                       <CheckCircle className="w-3 h-3 mr-2" />
-                      {api}
+                      <span className="flex items-center">
+                        {api}
+                        {api === 'OpenAI GPT' && <span className="ml-1 text-xs">🤖</span>}
+                        {api === 'Gemini AI' && <span className="ml-1 text-xs">🧠</span>}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -80,13 +84,17 @@ export const APIStatusIndicator: React.FC = () => {
               <div className="mb-4">
                 <h4 className="text-sm font-medium text-red-700 mb-2 flex items-center">
                   <XCircle className="w-4 h-4 mr-1" />
-                  Missing Configuration ({status.missing.length})
+                  Not Configured ({status.missing.length})
                 </h4>
                 <div className="space-y-1">
                   {status.missing.map(api => (
                     <div key={api} className="flex items-center text-sm text-red-600">
                       <XCircle className="w-3 h-3 mr-2" />
-                      {api}
+                      <span className="flex items-center">
+                        {api}
+                        {api === 'OpenAI GPT' && <span className="ml-1 text-xs">🤖</span>}
+                        {api === 'Gemini AI' && <span className="ml-1 text-xs">🧠</span>}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -96,22 +104,30 @@ export const APIStatusIndicator: React.FC = () => {
             {/* Help Text */}
             <div className="text-xs text-gray-500 bg-gray-50 rounded p-2">
               <p className="mb-1">
-                <strong>To configure APIs:</strong>
+                <strong>To configure AI models:</strong>
               </p>
               <p>1. Copy .env.example to .env</p>
-              <p>2. Add your API keys</p>
+              <p>2. Add your OpenAI and Gemini API keys</p>
               <p>3. Restart the application</p>
             </div>
 
             {/* Quick Actions */}
-            <div className="mt-3 flex space-x-2">
+            <div className="mt-3 flex flex-col space-y-1">
               <a
                 href="https://platform.openai.com/api-keys"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:text-blue-700 underline"
+                className="text-xs text-blue-600 hover:text-blue-700 underline flex items-center"
               >
-                Get OpenAI API Key
+                <span className="mr-1">🤖</span> Get OpenAI API Key
+              </a>
+              <a
+                href="https://ai.google.dev/gemini-api/docs/api-key"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:text-blue-700 underline flex items-center"
+              >
+                <span className="mr-1">🧠</span> Get Gemini API Key
               </a>
               <a
                 href="https://supabase.com/dashboard"
@@ -119,7 +135,7 @@ export const APIStatusIndicator: React.FC = () => {
                 rel="noopener noreferrer"
                 className="text-xs text-blue-600 hover:text-blue-700 underline"
               >
-                Setup Supabase
+                Setup Supabase Database
               </a>
             </div>
           </div>

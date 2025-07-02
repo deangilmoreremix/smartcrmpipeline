@@ -6,19 +6,12 @@ interface APIConfiguration {
   };
   gemini: {
     apiKey: string;
+    model: string;
     baseUrl: string;
   };
   supabase: {
     url: string;
     anonKey: string;
-  };
-  clearbit: {
-    apiKey: string;
-    baseUrl: string;
-  };
-  apollo: {
-    apiKey: string;
-    baseUrl: string;
   };
   sendgrid: {
     apiKey: string;
@@ -41,24 +34,17 @@ export const getAPIConfig = (): APIConfiguration => {
   return {
     openai: {
       apiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
-      model: import.meta.env.VITE_OPENAI_MODEL || 'gpt-4',
+      model: import.meta.env.VITE_OPENAI_MODEL || 'gpt-4o',
       baseUrl: 'https://api.openai.com/v1',
     },
     gemini: {
       apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
-      baseUrl: 'https://generativelanguage.googleapis.com/v1',
+      model: import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     },
     supabase: {
       url: import.meta.env.VITE_SUPABASE_URL || '',
       anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-    },
-    clearbit: {
-      apiKey: import.meta.env.VITE_CLEARBIT_API_KEY || '',
-      baseUrl: 'https://company.clearbit.com/v2',
-    },
-    apollo: {
-      apiKey: import.meta.env.VITE_APOLLO_API_KEY || '',
-      baseUrl: 'https://api.apollo.io/v1',
     },
     sendgrid: {
       apiKey: import.meta.env.VITE_SENDGRID_API_KEY || '',
@@ -79,20 +65,14 @@ export const validateAPIConfig = (): { configured: string[]; missing: string[] }
   const configured: string[] = [];
   const missing: string[] = [];
 
-  if (config.openai.apiKey) configured.push('OpenAI');
-  else missing.push('OpenAI');
+  if (config.openai.apiKey) configured.push('OpenAI GPT');
+  else missing.push('OpenAI GPT');
 
   if (config.gemini.apiKey) configured.push('Gemini AI');
   else missing.push('Gemini AI');
 
   if (config.supabase.url && config.supabase.anonKey) configured.push('Supabase');
   else missing.push('Supabase');
-
-  if (config.clearbit.apiKey) configured.push('Clearbit');
-  else missing.push('Clearbit');
-
-  if (config.apollo.apiKey) configured.push('Apollo');
-  else missing.push('Apollo');
 
   if (config.sendgrid.apiKey) configured.push('SendGrid');
   else missing.push('SendGrid');
@@ -106,7 +86,7 @@ export const validateAPIConfig = (): { configured: string[]; missing: string[] }
 // Helper to check if production APIs should be used
 export const shouldUseRealAPIs = (): boolean => {
   const config = getAPIConfig();
-  return !!(config.openai.apiKey || config.supabase.url);
+  return !!(config.openai.apiKey || config.gemini.apiKey || config.supabase.url);
 };
 
 export default getAPIConfig;
