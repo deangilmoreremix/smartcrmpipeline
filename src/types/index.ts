@@ -3,7 +3,7 @@ export interface Deal {
   title: string;
   company: string;
   contact: string;
-  contactId?: string; // New field to link to Contact entity
+  contactId?: string;
   value: number;
   stage: 'qualification' | 'proposal' | 'negotiation' | 'closed-won' | 'closed-lost';
   probability: number;
@@ -13,8 +13,24 @@ export interface Deal {
   createdAt: Date;
   updatedAt: Date;
   contactAvatar?: string;
+  companyAvatar?: string;
   lastActivity?: string;
   tags?: string[];
+  
+  // New fields to match contact features
+  isFavorite?: boolean;
+  customFields?: Record<string, string | number | boolean>;
+  socialProfiles?: {
+    linkedin?: string;
+    twitter?: string;
+    facebook?: string;
+    website?: string;
+  };
+  lastEnrichment?: {
+    confidence: number;
+    aiProvider?: string;
+    timestamp?: Date;
+  };
 }
 
 export interface PipelineColumn {
