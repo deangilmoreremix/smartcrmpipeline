@@ -70,7 +70,7 @@ export const CommunicationHub: React.FC<CommunicationHubProps> = ({ contact }) =
     },
     {
       id: '3',
-      content: 'Call summary: Discussed product features and pricing options. They're interested in the enterprise plan.',
+      content: 'Call summary: Discussed product features and pricing options. They\'re interested in the enterprise plan.',
       sender: 'user',
       timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
       status: 'sent',
