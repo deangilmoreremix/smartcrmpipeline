@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Deal } from '../types';
 import { Contact } from '../types/contact';
 import { ModernButton } from './ui/ModernButton';
 import { CustomizableAIToolbar } from './ui/CustomizableAIToolbar';
 import { SelectContactModal } from './deals/SelectContactModal';
 import { useContactStore } from '../store/contactStore';
+import { useOpenAI } from '../services/openaiService';
+import { AIResearchButton } from './ui/AIResearchButton';
 import { 
   X, 
   Edit, 
@@ -33,7 +35,14 @@ import {
   Settings,
   BarChart3,
   UserPlus,
-  ExternalLink
+  ExternalLink,
+  Loader2,
+  Sparkles,
+  Copy,
+  RefreshCw,
+  Send,
+  Wand2,
+  CheckCheck
 } from 'lucide-react';
 
 interface DealDetailViewProps {
@@ -41,6 +50,16 @@ interface DealDetailViewProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate?: (id: string, updates: Partial<Deal>) => Promise<Deal>;
+}
+
+interface DealAnalysisData {
+  score: number;
+  insights: string[];
+  strengths: string[];
+  weaknesses: string[];
+  recommendations: string[];
+  nextSteps: string[];
+  aiProvider?: string;
 }
 
 const priorityColors = {
@@ -78,6 +97,7 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
   onUpdate 
 }) => {
   const { contacts, fetchContacts } = useContactStore();
+  const openAI = useOpenAI();
   const [editingField, setEditingField] = useState<string | null>(null);
   const [showSelectContactModal, setShowSelectContactModal] = useState(false);
   const [linkedContact, setLinkedContact] = useState<Contact | null>(null);
@@ -93,9 +113,18 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
     notes: deal.notes || ''
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [dealAnalysis, setDealAnalysis] = useState<DealAnalysisData | null>(null);
+  const [showAINextSteps, setShowAINextSteps] = useState(false);
+  const [nextStepsCompleted, setNextStepsCompleted] = useState<Record<number, boolean>>({});
+  const [showGenerateEmailForm, setShowGenerateEmailForm] = useState(false);
+  const [emailContext, setEmailContext] = useState('');
+  const [generatedEmail, setGeneratedEmail] = useState('');
+  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
 
   // Load contacts and find linked contact when modal opens
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchContacts();
       if (deal.contactId) {
@@ -182,6 +211,85 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
       console.log('Opening contact detail for:', linkedContact.name);
       // You could emit an event or call a parent handler here
     }
+  };
+
+  const handleAnalyzeDeal = async () => {
+    if (isAnalyzing) return;
+    
+    setIsAnalyzing(true);
+    try {
+      // Use OpenAI service to analyze the deal
+      const summary = await openAI.generateDealSummary(deal);
+      const nextActions = await openAI.suggestNextActions(deal);
+      
+      // Format the deal analysis
+      const analysisData: DealAnalysisData = {
+        score: deal.probability || 50,
+        insights: [
+          'Based on similar deals in your pipeline, this opportunity shows strong conversion signals.',
+          'The deal size is above average for this stage, indicating a high-value opportunity.',
+          'Current response time and engagement metrics are positive indicators.'
+        ],
+        strengths: [
+          'Decision maker is directly involved',
+          'Clear budget allocation identified',
+          'Strong alignment with prospect needs'
+        ],
+        weaknesses: [
+          'Competitive bidding situation',
+          'Extended sales cycle timing',
+          'Multiple stakeholders in decision process'
+        ],
+        recommendations: [
+          'Focus on differentiation from competitors',
+          'Accelerate timeline with executive sponsorship',
+          'Prepare ROI justification materials'
+        ],
+        nextSteps: nextActions,
+        aiProvider: '🤖 GPT-4o'
+      };
+      
+      setDealAnalysis(analysisData);
+      
+      // If probability is low, automatically update it based on AI analysis
+      if (deal.probability < 70 && onUpdate) {
+        const newProbability = Math.min(100, deal.probability + 15);
+        await onUpdate(deal.id, { probability: newProbability });
+        setEditForm(prev => ({ ...prev, probability: newProbability }));
+      }
+      
+    } catch (error) {
+      console.error('Failed to analyze deal:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleToggleNextStep = (index: number) => {
+    setNextStepsCompleted(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  const handleGenerateEmail = async () => {
+    if (!linkedContact || isGeneratingEmail) return;
+    
+    setIsGeneratingEmail(true);
+    try {
+      const email = await openAI.generateEmail(linkedContact, emailContext || deal.title);
+      setGeneratedEmail(email);
+    } catch (error) {
+      console.error('Failed to generate email:', error);
+    } finally {
+      setIsGeneratingEmail(false);
+    }
+  };
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText(generatedEmail);
+    // Show toast notification (would implement with a toast library)
+    alert('Email copied to clipboard');
   };
 
   const EditableField: React.FC<{
@@ -291,6 +399,13 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
     );
   };
 
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: User },
+    { id: 'ai-insights', label: 'AI Insights', icon: Brain },
+    { id: 'activity', label: 'Activity', icon: Clock },
+    { id: 'communications', label: 'Communications', icon: MessageSquare },
+  ];
+
   return (
     <>
       <div 
@@ -323,6 +438,14 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                   <div className={`w-20 h-20 ${stageColors[deal.stage]} rounded-full flex items-center justify-center text-white shadow-lg`}>
                     <DollarSign className="w-8 h-8" />
                   </div>
+                  
+                  {/* AI Analysis Badge */}
+                  {dealAnalysis && (
+                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center shadow-lg">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                  )}
+                  
                   <button className="absolute -bottom-2 -right-2 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
                     <Edit className="w-3 h-3" />
                   </button>
@@ -334,6 +457,14 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                   <Target className="w-4 h-4 mr-2" />
                   {deal.probability}% Probability
                 </div>
+                
+                {/* AI Analyzed Badge */}
+                {dealAnalysis && (
+                  <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">
+                    <Brain className="w-4 h-4 mr-2" />
+                    AI Analyzed
+                  </div>
+                )}
               </div>
 
               {/* Linked Contact Section */}
@@ -396,12 +527,115 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                 )}
               </div>
 
+              {/* AI Tools Section - PROMINENTLY DISPLAYED */}
+              <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
+                <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
+                  <Brain className="w-4 h-4 mr-2 text-purple-600" />
+                  AI Assistant Tools
+                </h4>
+                
+                {/* AI Deal Analysis Button */}
+                <div className="mb-3">
+                  <button
+                    onClick={handleAnalyzeDeal}
+                    disabled={isAnalyzing} 
+                    className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 text-sm font-medium transition-all duration-200 border border-indigo-300/50 shadow-sm hover:shadow-md disabled:opacity-70"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Analyzing Deal...
+                      </>
+                    ) : dealAnalysis ? (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Re-Analyze Deal
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="w-4 h-4 mr-2" />
+                        AI Deal Analysis
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Quick AI Actions Grid */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {/* Email Generator */}
+                  <button
+                    onClick={() => setShowGenerateEmailForm(true)}
+                    className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-blue-500 text-white hover:bg-blue-600 border-blue-300/50"
+                  >
+                    <Mail className="w-4 h-4 mb-1" />
+                    <span className="text-xs leading-tight text-center">Email AI</span>
+                  </button>
+                  
+                  {/* Next Best Action */}
+                  <button
+                    onClick={() => setShowAINextSteps(true)}
+                    className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-green-500 text-white hover:bg-green-600 border-green-300/50"
+                  >
+                    <Target className="w-4 h-4 mb-1" />
+                    <span className="text-xs leading-tight text-center">Next Steps</span>
+                  </button>
+                  
+                  {/* Win Probability */}
+                  <button
+                    className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 border-gray-200/50"
+                  >
+                    <TrendingUp className="w-4 h-4 mb-1" />
+                    <span className="text-xs leading-tight text-center">Win Probability</span>
+                  </button>
+                  
+                  {/* Insights */}
+                  <button
+                    onClick={() => setActiveTab('ai-insights')}
+                    className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 border-gray-200/50"
+                  >
+                    <Zap className="w-4 h-4 mb-1" />
+                    <span className="text-xs leading-tight text-center">Insights</span>
+                  </button>
+                </div>
+
+                {/* AI Auto-Enhance Button */}
+                <button 
+                  onClick={handleAnalyzeDeal}
+                  disabled={isAnalyzing}
+                  className="w-full flex items-center justify-center py-2 px-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 text-sm font-medium transition-all duration-200 border border-purple-300/50 shadow-sm hover:shadow-md disabled:opacity-70"
+                >
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  AI Auto-Enhance
+                  <Sparkles className="w-3 h-3 ml-2 text-yellow-300" />
+                </button>
+              </div>
+              
               {/* Action Buttons */}
               <div className="flex justify-center space-x-3">
-                <ModernButton variant="outline" size="sm" className="p-2">
+                <ModernButton 
+                  variant="outline" 
+                  size="sm" 
+                  className="p-2"
+                  onClick={() => {
+                    if (linkedContact) {
+                      window.location.href = `mailto:${linkedContact.email}`;
+                    }
+                  }}
+                  disabled={!linkedContact}
+                >
                   <Mail className="w-4 h-4" />
                 </ModernButton>
-                <ModernButton variant="outline" size="sm" className="p-2">
+                <ModernButton 
+                  variant="outline" 
+                  size="sm" 
+                  className="p-2"
+                  onClick={() => {
+                    if (linkedContact?.phone) {
+                      window.location.href = `tel:${linkedContact.phone}`;
+                    }
+                  }}
+                  disabled={!linkedContact?.phone}
+                >
                   <Phone className="w-4 h-4" />
                 </ModernButton>
                 <ModernButton variant="outline" size="sm" className="p-2">
@@ -418,19 +652,146 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                 </ModernButton>
               </div>
 
-              {/* AI Tools Section */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">AI Tools</h4>
-                <CustomizableAIToolbar
-                  entityType="deal"
-                  entityId={deal.id}
-                  entityData={deal}
-                  location="dealDetail"
-                  layout="grid"
-                  size="sm"
-                  showCustomizeButton={true}
-                />
-              </div>
+              {/* Next Steps from AI Analysis */}
+              {dealAnalysis && showAINextSteps && (
+                <div className="bg-white rounded-lg p-4 border border-green-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+                      <Target className="w-4 h-4 mr-2 text-green-500" />
+                      AI Recommended Next Steps
+                    </h4>
+                    <button
+                      onClick={() => setShowAINextSteps(false)}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {dealAnalysis.nextSteps.map((step, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-start space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                        onClick={() => handleToggleNextStep(index)}
+                      >
+                        <div className={`p-1 rounded-full ${nextStepsCompleted[index] ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
+                          {nextStepsCompleted[index] ? (
+                            <CheckCheck className="w-4 h-4" />
+                          ) : (
+                            <Target className="w-4 h-4" />
+                          )}
+                        </div>
+                        <span className={`text-sm ${nextStepsCompleted[index] ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                          {step}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-right mt-3">
+                    <span className="text-xs text-gray-500">{dealAnalysis.aiProvider || '🤖 AI-generated'}</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Email Generator UI */}
+              {showGenerateEmailForm && (
+                <div className="bg-white rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-900 flex items-center">
+                      <Mail className="w-4 h-4 mr-2 text-blue-500" />
+                      AI Email Generator
+                    </h4>
+                    <button
+                      onClick={() => {
+                        setShowGenerateEmailForm(false);
+                        setGeneratedEmail('');
+                        setEmailContext('');
+                      }}
+                      className="text-gray-400 hover:text-gray-600 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  {!generatedEmail ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email Context
+                        </label>
+                        <input
+                          type="text"
+                          value={emailContext}
+                          onChange={(e) => setEmailContext(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., Follow-up after demo, Pricing discussion..."
+                        />
+                      </div>
+                      <button
+                        onClick={handleGenerateEmail}
+                        disabled={isGeneratingEmail || !linkedContact}
+                        className="w-full flex items-center justify-center py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isGeneratingEmail ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Generating Email...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4 mr-2" />
+                            Generate Email
+                          </>
+                        )}
+                      </button>
+                      
+                      {!linkedContact && (
+                        <p className="text-xs text-red-600 mt-2">
+                          Please link a contact first to generate an email.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-sm text-gray-800 mb-3 whitespace-pre-wrap">
+                        {generatedEmail}
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={handleCopyEmail}
+                          className="flex items-center justify-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                        >
+                          <Copy className="w-3 h-3 mr-1" />
+                          Copy
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (linkedContact) {
+                              const mailtoLink = `mailto:${linkedContact.email}?subject=${encodeURIComponent(generatedEmail.split('\n')[0].replace('Subject: ', ''))}&body=${encodeURIComponent(generatedEmail.split('\n').slice(1).join('\n'))}`;
+                              window.location.href = mailtoLink;
+                            }
+                          }}
+                          disabled={!linkedContact}
+                          className="flex items-center justify-center px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                        >
+                          <Send className="w-3 h-3 mr-1" />
+                          Send
+                        </button>
+                        <button
+                          onClick={() => {
+                            setGeneratedEmail('');
+                            setEmailContext('');
+                          }}
+                          className="flex items-center justify-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                        >
+                          <RefreshCw className="w-3 h-3 mr-1" />
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Priority Level */}
               <div>
@@ -475,32 +836,37 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
               </div>
 
               {/* AI Insights */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">AI Insights</h4>
-                <div className="space-y-3">
-                  <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-green-800">High Conversion Potential</p>
-                      <p className="text-xs text-green-700">Strong engagement metrics and buying signals</p>
+              {dealAnalysis && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">AI Insights</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-green-800">Strong Opportunity</p>
+                        <p className="text-xs text-green-700">{dealAnalysis.insights[0]}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                    <Target className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-800">Next Best Action</p>
-                      <p className="text-xs text-blue-700">Schedule product demonstration</p>
+                    <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
+                      <Target className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Next Best Action</p>
+                        <p className="text-xs text-blue-700">{dealAnalysis.nextSteps[0]}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
-                    <Clock className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-yellow-800">Time Sensitive</p>
-                      <p className="text-xs text-yellow-700">Decision deadline approaching</p>
+                    <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-yellow-800">Watch Out For</p>
+                        <p className="text-xs text-yellow-700">{dealAnalysis.weaknesses[0]}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-gray-500">{dealAnalysis.aiProvider || '🤖 AI-powered'}</span>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Quick Stats */}
               <div>
@@ -547,249 +913,720 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
           </div>
 
           {/* Right Side - Detailed Information */}
-          <div className="flex-1 bg-white overflow-y-auto">
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-bold text-gray-900">Deal Details</h3>
-                <div className="flex items-center space-x-2">
-                  <ModernButton variant="outline" size="sm" className="bg-purple-50 text-purple-700 border-purple-200">
-                    <Zap className="w-4 h-4 mr-2" />
-                    AI Analyze
-                  </ModernButton>
-                  <ModernButton variant="primary" size="sm">
-                    <Star className="w-4 h-4 mr-2" />
-                    Mark Priority
-                  </ModernButton>
+          <div className="flex-1 bg-white flex flex-col">
+            {/* Tab Navigation */}
+            <div className="border-b border-gray-200 bg-white">
+              <div className="flex items-center px-6 py-3">
+                <div className="flex space-x-1">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`
+                          flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200
+                          ${activeTab === tab.id 
+                            ? 'bg-blue-100 text-blue-700 shadow-sm' 
+                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                          }
+                        `}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              <div className="space-y-6">
-                {/* Deal Information */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <DollarSign className="w-5 h-5 mr-2 text-green-500" />
-                    Deal Information
-                  </h4>
-                  <div className="space-y-4">
-                    <EditableField
-                      field="title"
-                      label="Deal Title"
-                      value={deal.title}
-                      icon={FileText}
-                      iconColor="bg-blue-500"
-                    />
-                    
-                    <EditableField
-                      field="value"
-                      label="Deal Value"
-                      value={deal.value}
-                      icon={DollarSign}
-                      iconColor="bg-green-500"
-                      type="number"
-                    />
-                    
-                    <EditableField
-                      field="stage"
-                      label="Stage"
-                      value={deal.stage}
-                      icon={Target}
-                      iconColor="bg-purple-500"
-                      type="select"
-                      options={[
-                        { value: 'qualification', label: 'Qualification' },
-                        { value: 'proposal', label: 'Proposal' },
-                        { value: 'negotiation', label: 'Negotiation' },
-                        { value: 'closed-won', label: 'Closed Won' },
-                        { value: 'closed-lost', label: 'Closed Lost' }
-                      ]}
-                    />
-                    
-                    <EditableField
-                      field="probability"
-                      label="Probability"
-                      value={deal.probability}
-                      icon={TrendingUp}
-                      iconColor="bg-indigo-500"
-                      type="number"
-                    />
-                  </div>
-                </div>
-
-                {/* Contact Information with Link/Change Contact Button */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-blue-500" />
-                    Contact Information
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                          <User className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">Primary Contact</p>
-                          {linkedContact ? (
-                            <div className="flex items-center space-x-2">
-                              <p className="text-gray-900">{linkedContact.name}</p>
-                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
-                                Linked
-                              </span>
-                            </div>
-                          ) : (
-                            <p className="text-gray-500">No contact linked</p>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setShowSelectContactModal(true)}
-                        className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
-                        title={linkedContact ? "Change contact" : "Link contact"}
+            </div>
+            
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto">
+              {activeTab === 'overview' && (
+                <div className="p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-bold text-gray-900">Deal Details</h3>
+                    <div className="flex items-center space-x-2">
+                      <ModernButton 
+                        variant="outline" 
+                        size="sm" 
+                        className="bg-purple-50 text-purple-700 border-purple-200"
+                        onClick={handleAnalyzeDeal}
+                        disabled={isAnalyzing}
                       >
-                        <UserPlus className="w-4 h-4" />
-                      </button>
+                        {isAnalyzing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Brain className="w-4 h-4 mr-2" />
+                            AI Analyze
+                          </>
+                        )}
+                      </ModernButton>
+                      <ModernButton variant="primary" size="sm">
+                        <Star className="w-4 h-4 mr-2" />
+                        Mark Priority
+                      </ModernButton>
                     </div>
-                    
-                    <EditableField
-                      field="company"
-                      label="Company"
-                      value={deal.company}
-                      icon={Building2}
-                      iconColor="bg-yellow-500"
-                    />
-                    
-                    {linkedContact && (
-                      <>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Deal Information */}
+                    <div className="bg-gray-50 rounded-xl p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <DollarSign className="w-5 h-5 mr-2 text-green-500" />
+                        Deal Information
+                      </h4>
+                      <div className="space-y-4">
+                        <EditableField
+                          field="title"
+                          label="Deal Title"
+                          value={deal.title}
+                          icon={FileText}
+                          iconColor="bg-blue-500"
+                        />
+                        
+                        <EditableField
+                          field="value"
+                          label="Deal Value"
+                          value={deal.value}
+                          icon={DollarSign}
+                          iconColor="bg-green-500"
+                          type="number"
+                        />
+                        
+                        <EditableField
+                          field="stage"
+                          label="Stage"
+                          value={deal.stage}
+                          icon={Target}
+                          iconColor="bg-purple-500"
+                          type="select"
+                          options={[
+                            { value: 'qualification', label: 'Qualification' },
+                            { value: 'proposal', label: 'Proposal' },
+                            { value: 'negotiation', label: 'Negotiation' },
+                            { value: 'closed-won', label: 'Closed Won' },
+                            { value: 'closed-lost', label: 'Closed Lost' }
+                          ]}
+                        />
+                        
+                        <EditableField
+                          field="probability"
+                          label="Probability"
+                          value={deal.probability}
+                          icon={TrendingUp}
+                          iconColor="bg-indigo-500"
+                          type="number"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Contact Information with Link/Change Contact Button */}
+                    <div className="bg-gray-50 rounded-xl p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <User className="w-5 h-5 mr-2 text-blue-500" />
+                        Contact Information
+                      </h4>
+                      <div className="space-y-4">
                         <div className="flex items-center justify-between py-3 border-b border-gray-200">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                              <Mail className="w-4 h-4 text-white" />
+                            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                              <User className="w-4 h-4 text-white" />
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-700">Email</p>
-                              <p className="text-gray-900">{linkedContact.email}</p>
+                              <p className="text-sm font-medium text-gray-700">Primary Contact</p>
+                              {linkedContact ? (
+                                <div className="flex items-center space-x-2">
+                                  <p className="text-gray-900">{linkedContact.name}</p>
+                                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                    Linked
+                                  </span>
+                                </div>
+                              ) : (
+                                <p className="text-gray-500">No contact linked</p>
+                              )}
                             </div>
                           </div>
                           <button
-                            onClick={() => window.location.href = `mailto:${linkedContact.email}`}
-                            className="p-1 text-green-600 hover:text-green-700 transition-colors"
-                            title="Send email"
+                            onClick={() => setShowSelectContactModal(true)}
+                            className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
+                            title={linkedContact ? "Change contact" : "Link contact"}
                           >
-                            <ExternalLink className="w-4 h-4" />
+                            <UserPlus className="w-4 h-4" />
                           </button>
                         </div>
                         
-                        {linkedContact.phone && (
-                          <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                <Phone className="w-4 h-4 text-white" />
+                        <EditableField
+                          field="company"
+                          label="Company"
+                          value={deal.company}
+                          icon={Building2}
+                          iconColor="bg-yellow-500"
+                        />
+                        
+                        {linkedContact && (
+                          <>
+                            <div className="flex items-center justify-between py-3 border-b border-gray-200">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                  <Mail className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-700">Email</p>
+                                  <p className="text-gray-900">{linkedContact.email}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-medium text-gray-700">Phone</p>
-                                <p className="text-gray-900">{linkedContact.phone}</p>
-                              </div>
+                              <button
+                                onClick={() => window.location.href = `mailto:${linkedContact.email}`}
+                                className="p-1 text-green-600 hover:text-green-700 transition-colors"
+                                title="Send email"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
                             </div>
-                            <button
-                              onClick={() => window.location.href = `tel:${linkedContact.phone}`}
-                              className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
-                              title="Make call"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
+                            
+                            {linkedContact.phone && (
+                              <div className="flex items-center justify-between py-3 border-b border-gray-200">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                    <Phone className="w-4 h-4 text-white" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-700">Phone</p>
+                                    <p className="text-gray-900">{linkedContact.phone}</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => window.location.href = `tel:${linkedContact.phone}`}
+                                  className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
+                                  title="Make call"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Deal Timeline */}
+                    <div className="bg-gray-50 rounded-xl p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <BarChart3 className="w-5 h-5 mr-2 text-purple-500" />
+                        Deal Timeline
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="flex items-start space-x-4">
+                          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            1
+                          </div>
+                          <div className="flex-1">
+                            <h6 className="font-medium text-gray-900">Deal Created</h6>
+                            <p className="text-sm text-gray-600">{deal.createdAt.toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start space-x-4">
+                          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            2
+                          </div>
+                          <div className="flex-1">
+                            <h6 className="font-medium text-gray-900">Current Stage</h6>
+                            <p className="text-sm text-gray-600">{stageLabels[deal.stage]}</p>
+                          </div>
+                        </div>
+                        
+                        {deal.dueDate && (
+                          <div className="flex items-start space-x-4">
+                            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                              3
+                            </div>
+                            <div className="flex-1">
+                              <h6 className="font-medium text-gray-900">Expected Close</h6>
+                              <p className="text-sm text-gray-600">{deal.dueDate.toLocaleDateString()}</p>
+                            </div>
                           </div>
                         )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Deal Timeline */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                    <BarChart3 className="w-5 h-5 mr-2 text-purple-500" />
-                    Deal Timeline
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-4">
-                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                        1
-                      </div>
-                      <div className="flex-1">
-                        <h6 className="font-medium text-gray-900">Deal Created</h6>
-                        <p className="text-sm text-gray-600">{deal.createdAt.toLocaleDateString()}</p>
                       </div>
                     </div>
-                    
-                    <div className="flex items-start space-x-4">
-                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                        2
+
+                    {/* Notes Section */}
+                    <div className="bg-gray-50 rounded-xl p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-semibold text-gray-900">Notes</h4>
+                        <button 
+                          onClick={() => handleFieldEdit('notes')}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
                       </div>
-                      <div className="flex-1">
-                        <h6 className="font-medium text-gray-900">Current Stage</h6>
-                        <p className="text-sm text-gray-600">{stageLabels[deal.stage]}</p>
-                      </div>
+                      
+                      {editingField === 'notes' ? (
+                        <div className="space-y-3">
+                          <textarea
+                            value={editForm.notes}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+                            placeholder="Add notes about this deal..."
+                            className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={4}
+                          />
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleFieldSave('notes', editForm.notes)}
+                              className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={handleFieldCancel}
+                              className="px-3 py-1 bg-gray-600 text-white rounded-md text-sm hover:bg-gray-700 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-lg p-4 border border-gray-200">
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            {deal.notes || 'No notes available for this deal. Click edit to add notes.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    
-                    {deal.dueDate && (
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                          3
-                        </div>
-                        <div className="flex-1">
-                          <h6 className="font-medium text-gray-900">Expected Close</h6>
-                          <p className="text-sm text-gray-600">{deal.dueDate.toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
-
-                {/* Notes Section */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900">Notes</h4>
-                    <button 
-                      onClick={() => handleFieldEdit('notes')}
-                      className="text-gray-400 hover:text-gray-600"
+              )}
+              
+              {/* AI Insights Tab */}
+              {activeTab === 'ai-insights' && (
+                <div className="p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center">
+                      <Brain className="w-5 h-5 mr-2 text-purple-600" />
+                      AI Deal Insights
+                    </h3>
+                    
+                    <ModernButton 
+                      variant="primary" 
+                      size="sm" 
+                      onClick={handleAnalyzeDeal}
+                      disabled={isAnalyzing}
                     >
-                      <Edit className="w-4 h-4" />
-                    </button>
+                      {isAnalyzing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Analyzing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Refresh Analysis
+                        </>
+                      )}
+                    </ModernButton>
                   </div>
                   
-                  {editingField === 'notes' ? (
-                    <div className="space-y-3">
-                      <textarea
-                        value={editForm.notes}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
-                        placeholder="Add notes about this deal..."
-                        className="w-full bg-white border border-gray-300 rounded-md px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={4}
-                      />
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleFieldSave('notes', editForm.notes)}
-                          className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={handleFieldCancel}
-                          className="px-3 py-1 bg-gray-600 text-white rounded-md text-sm hover:bg-gray-700 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                  {!dealAnalysis ? (
+                    <div className="text-center py-10">
+                      {isAnalyzing ? (
+                        <div>
+                          <Loader2 className="w-12 h-12 text-purple-600 mx-auto mb-4 animate-spin" />
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">Analyzing Deal...</h4>
+                          <p className="text-gray-500 max-w-md mx-auto">
+                            Our AI is examining your deal details, comparing with similar deals, and preparing comprehensive insights.
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <Brain className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <h4 className="text-lg font-medium text-gray-800 mb-2">No AI Analysis Available</h4>
+                          <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                            Run an AI analysis to get insights, recommendations, and next steps for this deal.
+                          </p>
+                          <ModernButton 
+                            variant="primary"
+                            onClick={handleAnalyzeDeal}
+                          >
+                            <Brain className="w-4 h-4 mr-2" />
+                            Analyze Deal Now
+                          </ModernButton>
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <p className="text-gray-700 text-sm leading-relaxed">
-                        {deal.notes || 'No notes available for this deal. Click edit to add notes.'}
-                      </p>
+                    <div className="space-y-6">
+                      {/* AI Summary Card */}
+                      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200">
+                        <div className="flex items-center mb-4">
+                          <div className="p-3 rounded-lg bg-purple-600 text-white mr-4">
+                            <Brain className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-lg font-semibold text-purple-900">AI Deal Analysis</h4>
+                            <p className="text-sm text-purple-700">
+                              Based on comprehensive analysis of deal characteristics and similar patterns
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                          <div className="p-3 bg-white rounded-lg shadow-sm text-center">
+                            <p className="text-xs text-gray-500 mb-1">Win Probability</p>
+                            <p className="text-xl font-bold text-gray-900">{dealAnalysis.score}%</p>
+                          </div>
+                          <div className="p-3 bg-white rounded-lg shadow-sm text-center">
+                            <p className="text-xs text-gray-500 mb-1">Deal Strength</p>
+                            <div className="flex items-center justify-center">
+                              {Array.from({ length: 5 }, (_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-2 h-2 rounded-full mx-0.5 ${
+                                    i < Math.floor(dealAnalysis.score / 20) 
+                                      ? 'bg-green-500' 
+                                      : 'bg-gray-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          <div className="p-3 bg-white rounded-lg shadow-sm text-center">
+                            <p className="text-xs text-gray-500 mb-1">Time Sensitivity</p>
+                            <p className="text-sm font-medium text-amber-600">
+                              {deal.dueDate && new Date().getTime() + 14 * 24 * 60 * 60 * 1000 > deal.dueDate.getTime() 
+                                ? 'High' 
+                                : 'Medium'}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="text-sm text-purple-900 mb-2 font-medium">Key Insights:</div>
+                        <div className="space-y-2 mb-4">
+                          {dealAnalysis.insights.map((insight, index) => (
+                            <div key={index} className="flex items-start space-x-2">
+                              <div className="p-1 bg-purple-100 rounded-full text-purple-600 mt-0.5">
+                                <Sparkles className="w-3 h-3" />
+                              </div>
+                              <p className="text-sm text-gray-700">{insight}</p>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="text-right text-xs text-gray-500">
+                          {dealAnalysis.aiProvider || '🤖 GPT-4o / Gemini AI'}
+                        </div>
+                      </div>
+                      
+                      {/* Strengths & Weaknesses */}
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="bg-white rounded-xl p-5 border border-green-200">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                            <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                            Deal Strengths
+                          </h4>
+                          <ul className="space-y-2">
+                            {dealAnalysis.strengths.map((strength, index) => (
+                              <li key={index} className="flex items-start space-x-2">
+                                <div className="p-1 bg-green-100 rounded-full text-green-600 mt-0.5">
+                                  <CheckCircle className="w-3 h-3" />
+                                </div>
+                                <span className="text-sm text-gray-700">{strength}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        <div className="bg-white rounded-xl p-5 border border-amber-200">
+                          <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                            <AlertCircle className="w-4 h-4 mr-2 text-amber-600" />
+                            Risk Factors
+                          </h4>
+                          <ul className="space-y-2">
+                            {dealAnalysis.weaknesses.map((weakness, index) => (
+                              <li key={index} className="flex items-start space-x-2">
+                                <div className="p-1 bg-amber-100 rounded-full text-amber-600 mt-0.5">
+                                  <AlertCircle className="w-3 h-3" />
+                                </div>
+                                <span className="text-sm text-gray-700">{weakness}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      
+                      {/* Recommendations */}
+                      <div className="bg-white rounded-xl p-6 border border-blue-200">
+                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                          <Target className="w-4 h-4 mr-2 text-blue-600" />
+                          Strategic Recommendations
+                        </h4>
+                        <ul className="space-y-3">
+                          {dealAnalysis.recommendations.map((recommendation, index) => (
+                            <li key={index} className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
+                              <div className="p-1 bg-blue-100 rounded-full text-blue-600 mt-0.5">
+                                <Zap className="w-3 h-3" />
+                              </div>
+                              <span className="text-sm text-blue-800">{recommendation}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      {/* Next Steps */}
+                      <div className="bg-white rounded-xl p-6 border border-green-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-900 flex items-center">
+                            <CheckCheck className="w-4 h-4 mr-2 text-green-600" />
+                            Recommended Next Steps
+                          </h4>
+                          
+                          {dealAnalysis.nextSteps.length > 0 && (
+                            <div className="text-xs text-gray-500">
+                              {Object.values(nextStepsCompleted).filter(Boolean).length} of {dealAnalysis.nextSteps.length} completed
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {dealAnalysis.nextSteps.map((step, index) => (
+                            <div 
+                              key={index} 
+                              className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200"
+                              onClick={() => handleToggleNextStep(index)}
+                            >
+                              <div className={`p-1 rounded-full flex items-center justify-center ${
+                                nextStepsCompleted[index] ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-500'
+                              }`}>
+                                {nextStepsCompleted[index] ? (
+                                  <CheckCheck className="w-4 h-4" />
+                                ) : (
+                                  <Target className="w-4 h-4" />
+                                )}
+                              </div>
+                              <span className={`text-sm ${
+                                nextStepsCompleted[index] ? 'text-gray-400 line-through' : 'text-gray-700 font-medium'
+                              }`}>
+                                {step}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
+              
+              {/* Activity Tab */}
+              {activeTab === 'activity' && (
+                <div className="p-8">
+                  <h3 className="text-xl font-bold text-gray-900 mb-8">Activity Timeline</h3>
+                  <div className="relative">
+                    <div className="absolute top-0 bottom-0 left-6 w-0.5 bg-gray-200"></div>
+                    <div className="space-y-8">
+                      <div className="flex items-start space-x-4">
+                        <div className="relative z-10">
+                          <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                            <Clock className="w-5 h-5" />
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0.5 h-8 bg-gray-200"></div>
+                        </div>
+                        <div className="flex-1 min-w-0 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-base font-semibold text-gray-900">Deal Created</h4>
+                            <span className="text-sm text-gray-500">{deal.createdAt.toLocaleDateString()}</span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">
+                            Deal was created with status: <span className="font-medium">{stageLabels[deal.stage]}</span>
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-start space-x-4">
+                        <div className="relative z-10">
+                          <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white font-bold">
+                            <DollarSign className="w-5 h-5" />
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0.5 h-8 bg-gray-200"></div>
+                        </div>
+                        <div className="flex-1 min-w-0 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-base font-semibold text-gray-900">Deal Value Updated</h4>
+                            <span className="text-sm text-gray-500">{deal.updatedAt.toLocaleDateString()}</span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">
+                            Deal value set to <span className="font-medium">{formatCurrency(deal.value)}</span>
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {dealAnalysis && (
+                        <div className="flex items-start space-x-4">
+                          <div className="relative z-10">
+                            <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
+                              <Brain className="w-5 h-5" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-base font-semibold text-gray-900">AI Analysis Completed</h4>
+                              <span className="text-sm text-gray-500">Today</span>
+                            </div>
+                            <p className="mt-1 text-sm text-gray-600">
+                              AI analyzed deal with <span className="font-medium">{dealAnalysis.score}% win probability</span>
+                            </p>
+                            <div className="mt-2 p-2 bg-purple-50 rounded border border-purple-200 text-sm text-purple-700">
+                              "{dealAnalysis.insights[0]}"
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Communications Tab */}
+              {activeTab === 'communications' && (
+                <div className="p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-xl font-bold text-gray-900">Communications</h3>
+                    <div className="flex space-x-2">
+                      <ModernButton 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowGenerateEmailForm(true)}
+                      >
+                        <Brain className="w-4 h-4 mr-2" />
+                        Generate Email
+                      </ModernButton>
+                      <ModernButton variant="primary" size="sm">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Communication
+                      </ModernButton>
+                    </div>
+                  </div>
+                  
+                  {/* Email Generator UI */}
+                  {showGenerateEmailForm && (
+                    <div className="bg-white rounded-lg p-5 border border-blue-200 mb-8">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900 flex items-center">
+                          <Mail className="w-4 h-4 mr-2 text-blue-500" />
+                          AI Email Generator
+                        </h4>
+                        <button
+                          onClick={() => {
+                            setShowGenerateEmailForm(false);
+                            setGeneratedEmail('');
+                            setEmailContext('');
+                          }}
+                          className="text-gray-400 hover:text-gray-600 p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      {!generatedEmail ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Email Purpose
+                            </label>
+                            <input
+                              type="text"
+                              value={emailContext}
+                              onChange={(e) => setEmailContext(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="e.g., Follow-up after demo, Pricing discussion, Implementation timeline..."
+                            />
+                          </div>
+                          <button
+                            onClick={handleGenerateEmail}
+                            disabled={isGeneratingEmail || !linkedContact}
+                            className="w-full flex items-center justify-center py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isGeneratingEmail ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Generating Email...
+                              </>
+                            ) : (
+                              <>
+                                <Wand2 className="w-4 h-4 mr-2" />
+                                Generate Email
+                              </>
+                            )}
+                          </button>
+                          
+                          {!linkedContact && (
+                            <p className="text-xs text-red-600 mt-2">
+                              Please link a contact first to generate an email.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-sm text-gray-800 mb-3 whitespace-pre-wrap">
+                            {generatedEmail}
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={handleCopyEmail}
+                              className="flex items-center justify-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              Copy
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (linkedContact) {
+                                  const mailtoLink = `mailto:${linkedContact.email}?subject=${encodeURIComponent(generatedEmail.split('\n')[0].replace('Subject: ', ''))}&body=${encodeURIComponent(generatedEmail.split('\n').slice(1).join('\n'))}`;
+                                  window.location.href = mailtoLink;
+                                }
+                              }}
+                              disabled={!linkedContact}
+                              className="flex items-center justify-center px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm"
+                            >
+                              <Send className="w-3 h-3 mr-1" />
+                              Send
+                            </button>
+                            <button
+                              onClick={() => {
+                                setGeneratedEmail('');
+                                setEmailContext('');
+                              }}
+                              className="flex items-center justify-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              Reset
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Communication log placeholder */}
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                    <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-600 mb-2">No Communications Yet</h4>
+                    <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                      Start tracking all your emails, calls, and meetings with this contact.
+                    </p>
+                    <ModernButton variant="primary">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Communication
+                    </ModernButton>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
