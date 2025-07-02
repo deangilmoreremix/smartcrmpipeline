@@ -4,7 +4,11 @@ import { IntelligentAIService } from '../../services/intelligentAIService';
 import { useOpenAI } from '../../services/openaiService';
 import { useGeminiAI } from '../../services/geminiService';
 import { Deal } from '../../types';
-import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles, Zap, Brain } from 'lucide-react';
+import { Contact } from '../../types/contact';
+import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles, Zap, Brain, UserPlus, UserX } from 'lucide-react';
+import SelectContactModal from './SelectContactModal';
+import { useContactStore } from '../../store/contactStore';
+import AddContactModal from './AddContactModal';
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -41,6 +45,8 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     title: '',
     company: '',
     contact: '',
+    contactId: '',
+    contactAvatar: '',
     value: 0,
     stage: 'qualification' as Deal['stage'],
     probability: 50,
@@ -75,6 +81,12 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     competitors: []
   });
 
+  // Contact selection state
+  const [showContactSelector, setShowContactSelector] = useState(false);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const { contacts, fetchContacts } = useContactStore();
+
   // AI state
   const [isResearching, setIsResearching] = useState(false);
   const [aiInsights, setAiInsights] = useState<string[]>([]);
@@ -98,7 +110,8 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     const dealData: Omit<Deal, 'id' | 'createdAt' | 'updatedAt'> = {
       ...formData,
       dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
-      contactAvatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2'
+      // Use the selected contact's avatar if available, otherwise use a default
+      contactAvatar: selectedContact?.avatarSrc || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=64&h=64&dpr=2'
     };
 
     onSave(dealData);
@@ -111,6 +124,8 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       title: '',
       company: '',
       contact: '',
+      contactId: '',
+      contactAvatar: '',
       value: 0,
       stage: 'qualification',
       probability: 50,
@@ -144,6 +159,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     setResearchResults(null);
     setAiProvider('');
     setActiveTab('basic');
+    setSelectedContact(null);
   };
 
   const handleAIResearch = async () => {
@@ -234,6 +250,50 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
     } finally {
       setIsResearching(false);
     }
+  };
+
+  const handleSelectContact = (contact: Contact) => {
+    setSelectedContact(contact);
+    setFormData(prev => ({
+      ...prev,
+      contact: contact.name,
+      contactId: contact.id,
+      contactAvatar: contact.avatarSrc || ''
+    }));
+    
+    // Pre-fill company if empty
+    if (!formData.company && contact.company) {
+      setFormData(prev => ({
+        ...prev,
+        company: contact.company
+      }));
+    }
+    
+    // Update contact details
+    setContactDetails({
+      name: contact.name,
+      title: contact.title,
+      email: contact.email,
+      phone: contact.phone || '',
+      department: '',
+      linkedin: contact.socialProfiles?.linkedin || '',
+      notes: contact.notes || ''
+    });
+  };
+
+  const handleContactCreated = (contact: Contact) => {
+    handleSelectContact(contact);
+    setShowAddContactModal(false);
+  };
+
+  const handleClearContact = () => {
+    setSelectedContact(null);
+    setFormData(prev => ({
+      ...prev,
+      contact: '',
+      contactId: '',
+      contactAvatar: ''
+    }));
   };
 
   const addTag = () => {
@@ -333,17 +393,64 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                     />
                   </div>
 
+                  {/* Contact Person Selector */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Contact Person
                     </label>
-                    <input
-                      type="text"
-                      value={formData.contact}
-                      onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., John Smith"
-                    />
+                    <div className="flex space-x-2 items-center">
+                      {formData.contact ? (
+                        <div className="flex-1 flex items-center space-x-2 border border-blue-200 bg-blue-50 rounded-lg p-2">
+                          {selectedContact?.avatarSrc && (
+                            <img 
+                              src={selectedContact.avatarSrc} 
+                              alt={formData.contact}
+                              className="w-8 h-8 rounded-full object-cover border border-blue-200"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-blue-700 font-medium truncate">{formData.contact}</p>
+                            {selectedContact && (
+                              <p className="text-xs text-blue-600 truncate">{selectedContact.title} at {selectedContact.company}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleClearContact}
+                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded transition-colors"
+                          >
+                            <UserX className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.contact}
+                          onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., John Smith"
+                          readOnly
+                        />
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowContactSelector(true)}
+                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        title="Select existing contact"
+                      >
+                        <Users className="w-5 h-5" />
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowAddContactModal(true)}
+                        className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        title="Add new contact"
+                      >
+                        <UserPlus className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -487,114 +594,198 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Contact Information</h3>
-                  <button
-                    type="button"
-                    onClick={handleContactResearch}
-                    disabled={isResearching || !contactDetails.name}
-                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    <Search className="w-4 h-4" />
-                    <span>{isResearching ? 'Researching...' : 'AI Research'}</span>
-                  </button>
+                  <div className="flex space-x-2">
+                    {/* Contact selector button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowContactSelector(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>Select Contact</span>
+                    </button>
+                    
+                    {/* Add new contact button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowAddContactModal(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>New Contact</span>
+                    </button>
+                    
+                    {/* AI Research button */}
+                    <button
+                      type="button"
+                      onClick={handleContactResearch}
+                      disabled={isResearching || !contactDetails.name}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Search className="w-4 h-4" />
+                      <span>{isResearching ? 'Researching...' : 'AI Research'}</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      value={contactDetails.name}
-                      onChange={(e) => setContactDetails(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., John Smith"
-                    />
+                {selectedContact ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      {selectedContact.avatarSrc && (
+                        <img 
+                          src={selectedContact.avatarSrc} 
+                          alt={selectedContact.name}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md mr-4"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <h4 className="text-xl font-semibold text-gray-900">{selectedContact.name}</h4>
+                        <p className="text-gray-600">{selectedContact.title} at {selectedContact.company}</p>
+                        
+                        <div className="grid grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <p className="text-sm text-gray-500">Email</p>
+                            <p className="text-sm font-medium">{selectedContact.email}</p>
+                          </div>
+                          {selectedContact.phone && (
+                            <div>
+                              <p className="text-sm text-gray-500">Phone</p>
+                              <p className="text-sm font-medium">{selectedContact.phone}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm text-gray-500">Status</p>
+                            <p className="text-sm font-medium capitalize">{selectedContact.status}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Interest Level</p>
+                            <p className="text-sm font-medium capitalize">{selectedContact.interestLevel}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={handleClearContact}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            Change Contact
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Job Title
-                    </label>
-                    <input
-                      type="text"
-                      value={contactDetails.title}
-                      onChange={(e) => setContactDetails(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., VP of Sales"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Full Name
+                      </label>
                       <input
-                        type="email"
-                        value={contactDetails.email}
-                        onChange={(e) => setContactDetails(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="john.smith@company.com"
+                        type="text"
+                        value={contactDetails.name}
+                        onChange={(e) => setContactDetails(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., John Smith"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Job Title
+                      </label>
+                      <input
+                        type="text"
+                        value={contactDetails.title}
+                        onChange={(e) => setContactDetails(prev => ({ ...prev, title: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., VP of Sales"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                          type="email"
+                          value={contactDetails.email}
+                          onChange={(e) => setContactDetails(prev => ({ ...prev, email: e.target.value }))}
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="john.smith@company.com"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                          type="tel"
+                          value={contactDetails.phone}
+                          onChange={(e) => setContactDetails(prev => ({ ...prev, phone: e.target.value }))}
+                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="+1 (555) 123-4567"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Department
+                      </label>
+                      <input
+                        type="text"
+                        value={contactDetails.department}
+                        onChange={(e) => setContactDetails(prev => ({ ...prev, department: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., Sales"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        LinkedIn
+                      </label>
+                      <input
+                        type="url"
+                        value={contactDetails.linkedin}
+                        onChange={(e) => setContactDetails(prev => ({ ...prev, linkedin: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="https://linkedin.com/in/john-smith"
                       />
                     </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input
-                        type="tel"
-                        value={contactDetails.phone}
-                        onChange={(e) => setContactDetails(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="+1 (555) 123-4567"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Department
-                    </label>
-                    <input
-                      type="text"
-                      value={contactDetails.department}
-                      onChange={(e) => setContactDetails(prev => ({ ...prev, department: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., Sales"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      LinkedIn
-                    </label>
-                    <input
-                      type="url"
-                      value={contactDetails.linkedin}
-                      onChange={(e) => setContactDetails(prev => ({ ...prev, linkedin: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="https://linkedin.com/in/john-smith"
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Contact Notes
                   </label>
                   <textarea
-                    value={contactDetails.notes}
-                    onChange={(e) => setContactDetails(prev => ({ ...prev, notes: e.target.value }))}
+                    value={selectedContact?.notes || contactDetails.notes}
+                    onChange={(e) => {
+                      if (!selectedContact) {
+                        setContactDetails(prev => ({ ...prev, notes: e.target.value }));
+                      }
+                    }}
+                    readOnly={!!selectedContact}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-lg ${
+                      selectedContact ? 'bg-gray-50' : 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                     placeholder="Notes about this contact..."
                   />
+                  {selectedContact && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Contact is already saved in your CRM. Edit notes in the contact details.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -854,6 +1045,22 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
             <span>Create Deal</span>
           </button>
         </div>
+
+        {/* Contact Selection Modal */}
+        <SelectContactModal 
+          isOpen={showContactSelector}
+          onClose={() => setShowContactSelector(false)}
+          onSelectContact={handleSelectContact}
+          selectedContactId={formData.contactId}
+        />
+
+        {/* Add Contact Modal */}
+        <AddContactModal 
+          isOpen={showAddContactModal}
+          onClose={() => setShowAddContactModal(false)}
+          onSave={handleContactCreated}
+          selectAfterCreate={true}
+        />
       </div>
     </div>
   );
