@@ -4,7 +4,6 @@ import { PersonalizationProvider } from './contexts/PersonalizationContext';
 import { GamificationProvider } from './contexts/GamificationContext';
 import Pipeline from './components/Pipeline';
 import { DarkModeToggle } from './components/ui/DarkModeToggle';
-import { APIStatusIndicator } from './components/ui/APIStatusIndicator';
 import { useKeyboardShortcuts, globalShortcuts } from './hooks/useKeyboardShortcuts';
 
 function AppContent() {
@@ -26,9 +25,6 @@ function AppContent() {
 
       {/* Main content */}
       <Pipeline />
-
-      {/* API Status Indicator */}
-      <APIStatusIndicator />
     </div>
   );
 }
