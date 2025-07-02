@@ -226,13 +226,13 @@ class AIEnrichmentService {
 }
 
 // Singleton instance
-let aiEnrichmentService: AIEnrichmentService | null = null;
+let aiEnrichmentServiceInstance: AIEnrichmentService | null = null;
 
 export const getAIEnrichmentService = (): AIEnrichmentService => {
-  if (!aiEnrichmentService) {
-    aiEnrichmentService = new AIEnrichmentService();
+  if (!aiEnrichmentServiceInstance) {
+    aiEnrichmentServiceInstance = new AIEnrichmentService();
   }
-  return aiEnrichmentService;
+  return aiEnrichmentServiceInstance;
 };
 
 // For direct importing
