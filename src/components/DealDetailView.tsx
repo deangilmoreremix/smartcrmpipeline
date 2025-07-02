@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { Deal } from '../types';
+import { Contact } from '../types/contact';
 import { ModernButton } from './ui/ModernButton';
 import { CustomizableAIToolbar } from './ui/CustomizableAIToolbar';
+import SelectContactModal from './deals/SelectContactModal';
+import { useContactStore } from '../store/contactStore';
 import { 
   X, 
   Edit, 
@@ -30,7 +33,9 @@ import {
   Settings,
   BarChart3,
   Search,
-  Loader2
+  Loader2,
+  UserPlus,
+  Users
 } from 'lucide-react';
 
 interface DealDetailViewProps {
@@ -79,6 +84,7 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
     title: deal.title,
     company: deal.company,
     contact: deal.contact,
+    contactId: deal.contactId,
     value: deal.value,
     stage: deal.stage,
     probability: deal.probability,
@@ -86,6 +92,30 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
     notes: deal.notes || ''
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [showContactSelector, setShowContactSelector] = useState(false);
+  const { contacts, fetchContacts } = useContactStore();
+  const [contactDetail, setContactDetail] = useState<Contact | null>(null);
+  const [isLoadingContact, setIsLoadingContact] = useState(false);
+
+  // Fetch contact details if we have a contactId
+  React.useEffect(() => {
+    if (deal.contactId) {
+      setIsLoadingContact(true);
+      fetchContacts().then(() => {
+        setIsLoadingContact(false);
+      });
+    }
+  }, [deal.contactId, fetchContacts]);
+
+  // Update contact details when contacts are loaded
+  React.useEffect(() => {
+    if (deal.contactId && contacts.length > 0) {
+      const contact = contacts.find(c => c.id === deal.contactId);
+      if (contact) {
+        setContactDetail(contact);
+      }
+    }
+  }, [deal.contactId, contacts]);
 
   if (!isOpen) return null;
 
@@ -124,12 +154,41 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
       title: deal.title,
       company: deal.company,
       contact: deal.contact,
+      contactId: deal.contactId,
       value: deal.value,
       stage: deal.stage,
       probability: deal.probability,
       priority: deal.priority,
       notes: deal.notes || ''
     });
+  };
+
+  const handleSelectContact = async (contact: Contact) => {
+    if (onUpdate) {
+      setIsSaving(true);
+      try {
+        const updates: Partial<Deal> = { 
+          contact: contact.name,
+          contactId: contact.id,
+          contactAvatar: contact.avatarSrc
+        };
+        
+        await onUpdate(deal.id, updates);
+        
+        setEditForm(prev => ({ 
+          ...prev, 
+          contact: contact.name,
+          contactId: contact.id
+        }));
+        
+        setContactDetail(contact);
+        setShowContactSelector(false);
+      } catch (error) {
+        console.error('Failed to update contact:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const EditableField: React.FC<{
@@ -281,6 +340,96 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                 <Target className="w-4 h-4 mr-2" />
                 {deal.probability}% Probability
               </div>
+            </div>
+
+            {/* Contact Person Section */}
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-gray-900 flex items-center">
+                  <User className="w-4 h-4 mr-2 text-blue-600" />
+                  Contact Person
+                </h4>
+                <button
+                  onClick={() => setShowContactSelector(true)}
+                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                >
+                  <Users className="w-3 h-3 mr-1" />
+                  {deal.contactId ? 'Change' : 'Select Contact'}
+                </button>
+              </div>
+              
+              {isLoadingContact ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin mr-2" />
+                  <span className="text-gray-600 text-sm">Loading contact...</span>
+                </div>
+              ) : contactDetail ? (
+                <div className="flex items-center space-x-3">
+                  {contactDetail.avatarSrc ? (
+                    <img 
+                      src={contactDetail.avatarSrc}
+                      alt={contactDetail.name}
+                      className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-blue-600" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-gray-900">{contactDetail.name}</p>
+                    <p className="text-sm text-gray-600">{contactDetail.title}</p>
+                    <div className="flex items-center mt-1 space-x-3">
+                      <button className="text-xs text-blue-600 hover:text-blue-800 flex items-center">
+                        <Mail className="w-3 h-3 mr-1" />
+                        Email
+                      </button>
+                      {contactDetail.phone && (
+                        <button className="text-xs text-green-600 hover:text-green-800 flex items-center">
+                          <Phone className="w-3 h-3 mr-1" />
+                          Call
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : deal.contact ? (
+                <div className="flex items-center space-x-3">
+                  {deal.contactAvatar ? (
+                    <img 
+                      src={deal.contactAvatar}
+                      alt={deal.contact}
+                      className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-blue-600" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-medium text-gray-900">{deal.contact}</p>
+                    <p className="text-xs text-gray-500 mt-1">Contact not found in CRM</p>
+                    <button 
+                      onClick={() => setShowContactSelector(true)}
+                      className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center"
+                    >
+                      <UserPlus className="w-3 h-3 mr-1" />
+                      Link to CRM Contact
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-blue-700 text-sm mb-2">No contact person selected</p>
+                  <button 
+                    onClick={() => setShowContactSelector(true)}
+                    className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-full inline-flex items-center"
+                  >
+                    <UserPlus className="w-3 h-3 mr-1" />
+                    Add Contact Person
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -502,11 +651,11 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                 </div>
               </div>
 
-              {/* Contact Information */}
+              {/* Contact & Company Information */}
               <div className="bg-gray-50 rounded-xl p-6">
                 <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-blue-500" />
-                  Contact Information
+                  <Building2 className="w-5 h-5 mr-2 text-blue-500" />
+                  Company Information
                 </h4>
                 <div className="space-y-4">
                   <EditableField
@@ -517,15 +666,125 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                     iconColor="bg-yellow-500"
                   />
                   
-                  <EditableField
-                    field="contact"
-                    label="Contact Person"
-                    value={deal.contact}
-                    icon={User}
-                    iconColor="bg-blue-500"
-                  />
+                  {/* Contact Person with Link to CRM Contact */}
+                  <div className="flex items-center justify-between py-3 border-b border-gray-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Contact Person</p>
+                        <div className="flex items-center">
+                          <p className="text-gray-900">{deal.contact || 'Not assigned'}</p>
+                          
+                          {contactDetail && (
+                            <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                              In CRM
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => setShowContactSelector(true)}
+                      className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Users className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Contact Details (if available) */}
+              {contactDetail && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <User className="w-5 h-5 mr-2 text-blue-600" />
+                    Contact Details
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 flex items-center space-x-4">
+                      {contactDetail.avatarSrc ? (
+                        <img 
+                          src={contactDetail.avatarSrc}
+                          alt={contactDetail.name}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-white text-2xl font-bold">
+                          {contactDetail.name.charAt(0)}
+                        </div>
+                      )}
+                      
+                      <div>
+                        <h5 className="text-lg font-semibold text-gray-900">{contactDetail.name}</h5>
+                        <p className="text-gray-600">{contactDetail.title}</p>
+                        <div className="flex items-center mt-1 space-x-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            contactDetail.status === 'customer' ? 'bg-green-100 text-green-800' : 
+                            contactDetail.status === 'prospect' ? 'bg-blue-100 text-blue-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {contactDetail.status}
+                          </span>
+                          
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            contactDetail.interestLevel === 'hot' ? 'bg-red-100 text-red-800' : 
+                            contactDetail.interestLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                            contactDetail.interestLevel === 'low' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {contactDetail.interestLevel} interest
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h6 className="text-sm font-medium text-gray-700">Email</h6>
+                      <p className="text-gray-900">{contactDetail.email}</p>
+                    </div>
+                    
+                    {contactDetail.phone && (
+                      <div>
+                        <h6 className="text-sm font-medium text-gray-700">Phone</h6>
+                        <p className="text-gray-900">{contactDetail.phone}</p>
+                      </div>
+                    )}
+                    
+                    <div className="col-span-2">
+                      <div className="flex justify-between">
+                        <h6 className="text-sm font-medium text-gray-700">Actions</h6>
+                      </div>
+                      <div className="flex mt-2 space-x-2">
+                        <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors flex items-center">
+                          <Mail className="w-3 h-3 mr-1" />
+                          Email
+                        </button>
+                        {contactDetail.phone && (
+                          <button className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-sm hover:bg-green-200 transition-colors flex items-center">
+                            <Phone className="w-3 h-3 mr-1" />
+                            Call
+                          </button>
+                        )}
+                        <button className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm hover:bg-purple-200 transition-colors flex items-center">
+                          <Calendar className="w-3 h-3 mr-1" />
+                          Meeting
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {contactDetail.notes && (
+                    <div className="mt-4 pt-4 border-t border-blue-200">
+                      <h6 className="text-sm font-medium text-gray-700">Contact Notes</h6>
+                      <p className="text-sm text-gray-600 mt-1">{contactDetail.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Deal Timeline */}
               <div className="bg-gray-50 rounded-xl p-6">
@@ -616,6 +875,14 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Contact Selection Modal */}
+      <SelectContactModal 
+        isOpen={showContactSelector}
+        onClose={() => setShowContactSelector(false)}
+        onSelectContact={handleSelectContact}
+        selectedContactId={deal.contactId}
+      />
     </div>
   );
 };
