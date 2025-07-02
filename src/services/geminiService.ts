@@ -1,5 +1,6 @@
 import { Contact } from '../types/contact';
 import { AIContactAnalysis } from '../types/contact';
+import { AI_MODELS, getModelById } from '../config/aiModels';
 
 interface GeminiResponse {
   candidates: Array<{
@@ -12,32 +13,47 @@ interface GeminiResponse {
 }
 
 interface GeminiService {
-  analyzeContact: (contact: Contact) => Promise<AIContactAnalysis>;
-  generateEmail: (contact: Contact, context?: string) => Promise<string>;
-  getInsights: (contact: Contact) => Promise<string[]>;
-  generateDealSummary: (dealData: any) => Promise<string>;
-  suggestNextActions: (dealData: any) => Promise<string[]>;
-  researchCompany: (companyName: string, domain?: string) => Promise<any>;
-  findContactInfo: (personName: string, companyName?: string) => Promise<any>;
+  analyzeContact: (contact: Contact, modelId?: string) => Promise<AIContactAnalysis>;
+  generateEmail: (contact: Contact, context?: string, modelId?: string) => Promise<string>;
+  getInsights: (contact: Contact, modelId?: string) => Promise<string[]>;
+  generateDealSummary: (dealData: any, modelId?: string) => Promise<string>;
+  suggestNextActions: (dealData: any, modelId?: string) => Promise<string[]>;
+  researchCompany: (companyName: string, domain?: string, modelId?: string) => Promise<any>;
+  findContactInfo: (personName: string, companyName?: string, modelId?: string) => Promise<any>;
+  getAvailableModels: () => typeof AI_MODELS;
 }
 
 class RealGeminiService implements GeminiService {
   private apiKey: string;
   private baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  private model: string;
 
   constructor() {
     this.apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    this.model = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash';
     
     if (!this.apiKey) {
       console.warn('Gemini API key not found. Using mock responses.');
     }
   }
 
-  private async makeRequest(prompt: string, systemInstruction?: string): Promise<string> {
+  getAvailableModels() {
+    return AI_MODELS.filter(model => model.provider === 'gemini');
+  }
+
+  private getModelId(modelId?: string): string {
+    if (modelId) return modelId;
+    return import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash-exp';
+  }
+
+  private async makeRequest(prompt: string, systemInstruction?: string, modelId?: string): Promise<string> {
     if (!this.apiKey) {
       throw new Error('Gemini API key not configured');
+    }
+
+    const selectedModelId = this.getModelId(modelId);
+    const model = getModelById(selectedModelId);
+    
+    if (!model || model.provider !== 'gemini') {
+      throw new Error(`Invalid Gemini model: ${selectedModelId}`);
     }
 
     try {
@@ -49,9 +65,9 @@ class RealGeminiService implements GeminiService {
         }],
         generationConfig: {
           temperature: 0.7,
-          topK: 40,
+          topK: model.category === 'gemma' ? 40 : 64,
           topP: 0.95,
-          maxOutputTokens: 1024,
+          maxOutputTokens: Math.min(model.maxTokens, 2048),
         },
         safetySettings: [
           {
@@ -61,12 +77,20 @@ class RealGeminiService implements GeminiService {
           {
             category: "HARM_CATEGORY_HATE_SPEECH",
             threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", 
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
           }
         ]
       };
 
       const response = await fetch(
-        `${this.baseUrl}/models/${this.model}:generateContent?key=${this.apiKey}`,
+        `${this.baseUrl}/models/${selectedModelId}:generateContent?key=${this.apiKey}`,
         {
           method: 'POST',
           headers: {
@@ -77,19 +101,28 @@ class RealGeminiService implements GeminiService {
       );
 
       if (!response.ok) {
-        throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data: GeminiResponse = await response.json();
+      
+      if (!data.candidates || data.candidates.length === 0) {
+        throw new Error('No response candidates from Gemini API');
+      }
+
       return data.candidates[0]?.content?.parts[0]?.text || '';
     } catch (error) {
-      console.error('Gemini API request failed:', error);
+      console.error(`Gemini API request failed for model ${selectedModelId}:`, error);
       throw error;
     }
   }
 
-  async analyzeContact(contact: Contact): Promise<AIContactAnalysis> {
+  async analyzeContact(contact: Contact, modelId?: string): Promise<AIContactAnalysis> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
       const prompt = `
         Analyze this sales contact and provide a detailed assessment:
         
@@ -113,11 +146,12 @@ class RealGeminiService implements GeminiService {
         }
         
         Base the score on factors like company size, industry, contact seniority, engagement level, and data completeness.
+        ${model?.category === 'gemma' ? 'Focus on clear, actionable insights that directly help with sales strategy.' : ''}
       `;
 
-      const systemInstruction = 'You are an expert sales analyst with deep knowledge of B2B sales processes. Provide detailed, actionable insights about sales contacts that will help close more deals.';
+      const systemInstruction = `You are an expert sales analyst using ${model?.name || selectedModelId}. Provide detailed, actionable insights about sales contacts that will help close more deals. ${model?.category === 'gemma' ? 'Be concise and practical in your analysis.' : 'Provide comprehensive analysis with deep insights.'}`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       
       // Parse JSON response
       const analysis = JSON.parse(response);
@@ -133,8 +167,11 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async generateEmail(contact: Contact, context?: string): Promise<string> {
+  async generateEmail(contact: Contact, context?: string, modelId?: string): Promise<string> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
       const prompt = `
         Generate a professional sales email for this contact:
         
@@ -153,11 +190,12 @@ class RealGeminiService implements GeminiService {
         6. Matches their interest level (${contact.interestLevel})
         
         Format as a complete email with subject line.
+        ${model?.category === 'gemma' ? 'Keep the email concise and direct.' : ''}
       `;
 
-      const systemInstruction = 'You are an expert sales copywriter who creates high-converting, personalized sales emails. Write emails that get responses and drive action while maintaining professionalism.';
+      const systemInstruction = `You are an expert sales copywriter using ${model?.name || selectedModelId}. Write high-converting, personalized sales emails that get responses and drive action while maintaining professionalism.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return response;
     } catch (error) {
       console.error('Failed to generate email with Gemini:', error);
@@ -165,10 +203,15 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async getInsights(contact: Contact): Promise<string[]> {
+  async getInsights(contact: Contact, modelId?: string): Promise<string[]> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
+      const maxInsights = model?.category === 'gemma' ? 4 : 6;
+      
       const prompt = `
-        Generate 4-6 actionable insights about this sales contact:
+        Generate ${maxInsights} actionable insights about this sales contact:
         
         ${contact.name} - ${contact.title} at ${contact.company}
         Status: ${contact.status}
@@ -179,11 +222,12 @@ class RealGeminiService implements GeminiService {
         Provide insights as a JSON array of strings.
         Focus on sales strategy, timing, approach recommendations, and potential opportunities.
         Each insight should be specific and actionable.
+        ${model?.category === 'gemma' ? 'Keep insights concise and practical.' : ''}
       `;
 
-      const systemInstruction = 'You are a sales strategist with expertise in B2B relationship building and deal closure. Provide specific, actionable insights that sales teams can immediately implement.';
+      const systemInstruction = `You are a sales strategist using ${model?.name || selectedModelId} with expertise in B2B relationship building and deal closure. Provide specific, actionable insights that sales teams can immediately implement.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return JSON.parse(response);
     } catch (error) {
       console.error('Failed to get insights with Gemini:', error);
@@ -191,8 +235,11 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async generateDealSummary(dealData: any): Promise<string> {
+  async generateDealSummary(dealData: any, modelId?: string): Promise<string> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
       const prompt = `
         Create a comprehensive deal summary for:
         
@@ -211,11 +258,12 @@ class RealGeminiService implements GeminiService {
         - Potential risks or challenges
         - Critical next steps
         - Timeline considerations
+        ${model?.category === 'gemma' ? 'Keep the summary concise and focused on actionable items.' : ''}
       `;
 
-      const systemInstruction = 'You are a sales manager with expertise in deal analysis and pipeline management. Create clear, actionable deal summaries that help sales teams focus on what matters most.';
+      const systemInstruction = `You are a sales manager using ${model?.name || selectedModelId} with expertise in deal analysis and pipeline management. Create clear, actionable deal summaries that help sales teams focus on what matters most.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return response;
     } catch (error) {
       console.error('Failed to generate deal summary with Gemini:', error);
@@ -223,10 +271,15 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async suggestNextActions(dealData: any): Promise<string[]> {
+  async suggestNextActions(dealData: any, modelId?: string): Promise<string[]> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
+      const maxActions = model?.category === 'gemma' ? 4 : 6;
+      
       const prompt = `
-        Suggest specific next actions for this deal:
+        Suggest ${maxActions} specific next actions for this deal:
         
         Deal: ${dealData.title}
         Stage: ${dealData.stage}
@@ -236,17 +289,18 @@ class RealGeminiService implements GeminiService {
         Due Date: ${dealData.dueDate ? new Date(dealData.dueDate).toLocaleDateString() : 'Not set'}
         Notes: ${dealData.notes || 'No notes'}
         
-        Provide 4-6 specific, actionable next steps as a JSON array of strings.
+        Provide ${maxActions} specific, actionable next steps as a JSON array of strings.
         Focus on actions that will:
         - Move the deal forward to the next stage
         - Increase probability of closure
         - Address any potential risks
         - Maintain momentum
+        ${model?.category === 'gemma' ? 'Make actions specific and immediately actionable.' : ''}
       `;
 
-      const systemInstruction = 'You are a sales coach with expertise in deal progression and closing strategies. Suggest specific actions that sales teams can take immediately to advance deals.';
+      const systemInstruction = `You are a sales coach using ${model?.name || selectedModelId} with expertise in deal progression and closing strategies. Suggest specific actions that sales teams can take immediately to advance deals.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return JSON.parse(response);
     } catch (error) {
       console.error('Failed to suggest next actions with Gemini:', error);
@@ -254,8 +308,11 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async researchCompany(companyName: string, domain?: string): Promise<any> {
+  async researchCompany(companyName: string, domain?: string, modelId?: string): Promise<any> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
       const prompt = `
         Research and provide comprehensive information about this company:
         
@@ -276,11 +333,12 @@ class RealGeminiService implements GeminiService {
           "competitiveLandscape": ["main competitors"],
           "recentTrends": ["industry trends affecting this company"]
         }
+        ${model?.category === 'gemma' ? 'Focus on actionable business intelligence.' : ''}
       `;
 
-      const systemInstruction = 'You are a business intelligence analyst with expertise in company research and competitive analysis. Provide detailed, accurate information that helps sales teams understand prospects better.';
+      const systemInstruction = `You are a business intelligence analyst using ${model?.name || selectedModelId} with expertise in company research and competitive analysis. Provide detailed, accurate information that helps sales teams understand prospects better.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return JSON.parse(response);
     } catch (error) {
       console.error('Failed to research company with Gemini:', error);
@@ -288,8 +346,11 @@ class RealGeminiService implements GeminiService {
     }
   }
 
-  async findContactInfo(personName: string, companyName?: string): Promise<any> {
+  async findContactInfo(personName: string, companyName?: string, modelId?: string): Promise<any> {
     try {
+      const selectedModelId = this.getModelId(modelId);
+      const model = getModelById(selectedModelId);
+      
       const prompt = `
         Provide insights and recommendations for connecting with this person:
         
@@ -309,11 +370,12 @@ class RealGeminiService implements GeminiService {
           "emailTips": ["subject line suggestions", "email structure"],
           "meetingTopics": ["discussion points for first meeting"]
         }
+        ${model?.category === 'gemma' ? 'Focus on practical, immediately actionable advice.' : ''}
       `;
 
-      const systemInstruction = 'You are a sales development expert with deep knowledge of B2B outreach and relationship building. Provide strategic advice for connecting with prospects effectively.';
+      const systemInstruction = `You are a sales development expert using ${model?.name || selectedModelId} with deep knowledge of B2B outreach and relationship building. Provide strategic advice for connecting with prospects effectively.`;
       
-      const response = await this.makeRequest(prompt, systemInstruction);
+      const response = await this.makeRequest(prompt, systemInstruction, selectedModelId);
       return JSON.parse(response);
     } catch (error) {
       console.error('Failed to find contact info with Gemini:', error);

@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useAIResearch } from '../../services/aiResearchService';
 import { useOpenAI } from '../../services/openaiService';
 import { useGeminiAI } from '../../services/geminiService';
+import { ModelSelector } from '../ui/ModelSelector';
+import { getDefaultModel } from '../../config/aiModels';
 import { Deal } from '../../types';
-import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle } from 'lucide-react';
+import { X, Save, Bot, Search, Users, Building, Mail, Phone, MapPin, Calendar, DollarSign, Target, AlertCircle, Sparkles } from 'lucide-react';
 
 interface AddDealModalProps {
   isOpen: boolean;
@@ -78,7 +80,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
   const [isResearching, setIsResearching] = useState(false);
   const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [researchResults, setResearchResults] = useState<any>(null);
-  const [selectedAiModel, setSelectedAiModel] = useState<'openai' | 'gemini'>('gemini');
+  const [selectedAiModel, setSelectedAiModel] = useState(getDefaultModel('gemini').id);
   
   // UI state
   const [activeTab, setActiveTab] = useState<'basic' | 'contact' | 'company' | 'ai'>('basic');
@@ -150,7 +152,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
 
     setIsResearching(true);
     try {
-      // Research company using AI
+      // Research company using AI with selected model
       const companyData = await aiResearch.researchCompany(formData.company);
       
       // Update company details
@@ -167,20 +169,18 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
         competitors: companyData.competitors || []
       });
 
-      // Generate AI insights based on selected model
+      // Generate AI insights using selected model
       let insights: string[] = [];
-      if (selectedAiModel === 'gemini') {
-        insights = await geminiService.getInsights({
-          name: formData.company,
-          company: formData.company,
-          industry: companyData.industry
-        } as any);
+      const mockContact = {
+        name: formData.company,
+        company: formData.company,
+        industry: companyData.industry
+      } as any;
+      
+      if (selectedAiModel.startsWith('gpt-') || selectedAiModel.includes('openai')) {
+        insights = await openaiService.getInsights(mockContact);
       } else {
-        insights = await openaiService.getInsights({
-          name: formData.company,
-          company: formData.company,
-          industry: companyData.industry
-        } as any);
+        insights = await geminiService.getInsights(mockContact, selectedAiModel);
       }
 
       setAiInsights(insights);
@@ -190,7 +190,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
       setFormData(prev => ({
         ...prev,
         title: `${companyData.potentialNeeds?.[0] || 'Business Solution'} for ${companyData.name}`,
-        notes: `Company research completed using ${selectedAiModel.toUpperCase()}. ${companyData.description}`
+        notes: `Company research completed using ${selectedAiModel}. ${companyData.description}`
       }));
 
     } catch (error) {
@@ -721,26 +721,32 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
             {activeTab === 'ai' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">AI-Powered Research</h3>
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={selectedAiModel}
-                      onChange={(e) => setSelectedAiModel(e.target.value as 'openai' | 'gemini')}
-                      className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="gemini">🧠 Gemini AI</option>
-                      <option value="openai">🤖 OpenAI GPT</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleAIResearch}
-                      disabled={isResearching || !formData.company}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Bot className="w-4 h-4" />
-                      <span>{isResearching ? 'Researching...' : 'Start AI Research'}</span>
-                    </button>
-                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <Sparkles className="w-5 h-5 mr-2 text-purple-500" />
+                    AI-Powered Research
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={handleAIResearch}
+                    disabled={isResearching || !formData.company}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  >
+                    <Bot className="w-4 h-4" />
+                    <span>{isResearching ? 'Researching...' : 'Start AI Research'}</span>
+                  </button>
+                </div>
+
+                {/* Model Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select AI Model for Research
+                  </label>
+                  <ModelSelector
+                    selectedModel={selectedAiModel}
+                    onModelChange={setSelectedAiModel}
+                    provider="all"
+                    showDescription={true}
+                  />
                 </div>
 
                 {isResearching && (
@@ -754,7 +760,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
                   <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 border border-purple-200">
                     <h4 className="font-semibold text-purple-900 mb-3 flex items-center">
                       <Bot className="w-5 h-5 mr-2" />
-                      AI Insights ({selectedAiModel.toUpperCase()})
+                      AI Insights ({selectedAiModel})
                     </h4>
                     <ul className="space-y-2">
                       {aiInsights.map((insight, index) => (
