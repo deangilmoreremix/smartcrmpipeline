@@ -42,7 +42,9 @@ import {
   Send,
   Copy,
   Wand2,
-  RotateCw
+  RotateCw,
+  Search,
+  Loader2
 } from 'lucide-react';
 
 interface DealDetailViewProps {
