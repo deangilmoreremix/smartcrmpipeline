@@ -292,26 +292,11 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
       // Simulate AI analysis
       await new Promise(resolve => setTimeout(resolve, 2000));
       const newScore = Math.floor(Math.random() * 40) + 60; // Random score between 60-100
-      const updatedContact = { 
-        ...editedContact, 
-        aiScore: newScore,
-        lastEnrichment: {
-          confidence: newScore,
-          aiProvider: 'OpenAI GPT-4o',
-          timestamp: new Date()
-        }
-      };
+      const updatedContact = { ...editedContact, aiScore: newScore };
       setEditedContact(updatedContact);
       
       if (onUpdate) {
-        await onUpdate(contact.id, { 
-          aiScore: newScore,
-          lastEnrichment: {
-            confidence: newScore,
-            aiProvider: 'OpenAI GPT-4o',
-            timestamp: new Date()
-          }
-        });
+        await onUpdate(contact.id, { aiScore: newScore });
       }
     } catch (error) {
       console.error('Analysis failed:', error);
@@ -359,11 +344,6 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
       // Update AI score if provided
       if (enrichmentData.confidence) {
         updates.aiScore = Math.round(enrichmentData.confidence);
-        updates.lastEnrichment = {
-          confidence: Math.round(enrichmentData.confidence),
-          aiProvider: enrichmentData.aiProvider || 'AI Assistant',
-          timestamp: new Date()
-        };
       }
       
       const updatedContact = { ...editedContact, ...updates };
@@ -553,14 +533,9 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                 {/* Lead Score */}
                 <button 
                   onClick={handleAnalyzeContact}
-                  disabled={isAnalyzing}
                   className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 border-blue-300/50"
                 >
-                  {isAnalyzing ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mb-1"></div>
-                  ) : (
-                    <BarChart3 className="w-4 h-4 mb-1" />
-                  )}
+                  <BarChart3 className="w-4 h-4 mb-1" />
                   <span className="text-xs leading-tight text-center">Lead Score</span>
                 </button>
                 
@@ -698,7 +673,7 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                           autoFocus
                         />
                       ) : (
-                        <p className="text-sm font-medium text-gray-900">{editedContact.phone || 'Not provided'}</p>
+                        <p className="text-sm font-medium text-gray-900">{editedContact.phone || '+91 120 222 313'}</p>
                       )}
                     </div>
                   </div>
@@ -834,7 +809,7 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Last Connected</p>
-                      <p className="text-sm font-medium text-gray-900 leading-tight">{editedContact.lastConnected || 'No recent connection'}</p>
+                      <p className="text-sm font-medium text-gray-900 leading-tight">06/15/2023 at 7:16 pm</p>
                     </div>
                   </div>
                   <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
@@ -1299,7 +1274,6 @@ export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
                             variant="primary" 
                             size="sm" 
                             onClick={handleAddCustomField}
-                            disabled={!newFieldName || !newFieldValue}
                           >
                             Add Field
                           </ModernButton>

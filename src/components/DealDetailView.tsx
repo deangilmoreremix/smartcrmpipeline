@@ -35,7 +35,8 @@ import {
   Search,
   Loader2,
   UserPlus,
-  Users
+  Users,
+  UserX
 } from 'lucide-react';
 
 interface DealDetailViewProps {
@@ -185,6 +186,34 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
         setShowContactSelector(false);
       } catch (error) {
         console.error('Failed to update contact:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  // New function to remove contact from deal
+  const handleRemoveContact = async () => {
+    if (onUpdate) {
+      setIsSaving(true);
+      try {
+        const updates: Partial<Deal> = {
+          contact: '',
+          contactId: undefined,
+          contactAvatar: undefined
+        };
+        
+        await onUpdate(deal.id, updates);
+        
+        setEditForm(prev => ({
+          ...prev,
+          contact: '',
+          contactId: ''
+        }));
+        
+        setContactDetail(null);
+      } catch (error) {
+        console.error('Failed to remove contact from deal:', error);
       } finally {
         setIsSaving(false);
       }
@@ -349,13 +378,24 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                   <User className="w-4 h-4 mr-2 text-blue-600" />
                   Contact Person
                 </h4>
-                <button
-                  onClick={() => setShowContactSelector(true)}
-                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
-                >
-                  <Users className="w-3 h-3 mr-1" />
-                  {deal.contactId ? 'Change' : 'Select Contact'}
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setShowContactSelector(true)}
+                    className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                  >
+                    <Users className="w-3 h-3 mr-1" />
+                    {deal.contactId ? 'Change' : 'Select Contact'}
+                  </button>
+                  {deal.contactId && (
+                    <button
+                      onClick={handleRemoveContact}
+                      className="text-red-600 hover:text-red-800 text-sm flex items-center"
+                    >
+                      <UserX className="w-3 h-3 mr-1" />
+                      Remove
+                    </button>
+                  )}
+                </div>
               </div>
               
               {isLoadingContact ? (
@@ -686,12 +726,25 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
                       </div>
                     </div>
                     
-                    <button
-                      onClick={() => setShowContactSelector(true)}
-                      className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                    >
-                      <Users className="w-4 h-4" />
-                    </button>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setShowContactSelector(true)}
+                        className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Select contact"
+                      >
+                        <Users className="w-4 h-4" />
+                      </button>
+                      
+                      {deal.contactId && (
+                        <button
+                          onClick={handleRemoveContact}
+                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove contact"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
