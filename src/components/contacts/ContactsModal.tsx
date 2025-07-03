@@ -6,6 +6,7 @@ import { useGamification } from '../../contexts/GamificationContext';
 import { useOpenAI } from '../../services/openaiService';
 import { Contact } from '../../types/contact';
 import { AIEnhancedContactCard } from './AIEnhancedContactCard';
+import AddContactModal from '../deals/AddContactModal';
 import Fuse from 'fuse.js';
 import { 
   X, 
@@ -33,47 +34,10 @@ interface ContactsModalProps {
   onClose: () => void;
 }
 
-const interestColors = {
-  hot: 'bg-red-500',
-  medium: 'bg-yellow-500',
-  low: 'bg-blue-500',
-  cold: 'bg-gray-400'
-};
-
-const interestLabels = {
-  hot: 'Hot Client',
-  medium: 'Medium Interest',
-  low: 'Low Interest',
-  cold: 'Non Interest'
-};
-
-const sourceColors: { [key: string]: string } = {
-  'LinkedIn': 'bg-blue-600',
-  'Facebook': 'bg-blue-500',
-  'Email': 'bg-green-500',
-  'Website': 'bg-purple-500',
-  'Referral': 'bg-orange-500',
-  'Typeform': 'bg-pink-500',
-  'Cold Call': 'bg-gray-600'
-};
-
-const filterOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Hot Client', value: 'hot' },
-  { label: 'Medium Interest', value: 'medium' },
-  { label: 'Low Interest', value: 'low' },
-  { label: 'Non Interest', value: 'cold' }
-];
-
-const statusOptions = [
-  { label: 'All Status', value: 'all' },
-  { label: 'Lead', value: 'lead' },
-  { label: 'Prospect', value: 'prospect' },
-  { label: 'Customer', value: 'customer' },
-  { label: 'Churned', value: 'churned' }
-];
-
-export const ContactsModal: React.FC<ContactsModalProps> = ({ isOpen, onClose }) => {
+export const ContactsModal: React.FC<ContactsModalProps> = ({ 
+  isOpen, 
+  onClose 
+}) => {
   const { contacts, isLoading, updateContact, createContact, fetchContacts } = useContactStore();
   const { teamMembers, addTeamMember, removeTeamMember } = useGamification();
   const openai = useOpenAI();
@@ -93,6 +57,7 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({ isOpen, onClose })
   const [bulkActionDropdown, setBulkActionDropdown] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'company' | 'score' | 'updated'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
 
   // Load contacts on mount
   useEffect(() => {
@@ -331,7 +296,28 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({ isOpen, onClose })
     }
   };
 
+  const handleContactCreated = (contact: Contact) => {
+    // Handle the new contact creation
+    setShowAddContactModal(false);
+  };
+
   if (!isOpen) return null;
+
+  const filterOptions = [
+    { label: 'All', value: 'all' },
+    { label: 'Hot Client', value: 'hot' },
+    { label: 'Medium Interest', value: 'medium' },
+    { label: 'Low Interest', value: 'low' },
+    { label: 'Non Interest', value: 'cold' }
+  ];
+
+  const statusOptions = [
+    { label: 'All Status', value: 'all' },
+    { label: 'Lead', value: 'lead' },
+    { label: 'Prospect', value: 'prospect' },
+    { label: 'Customer', value: 'customer' },
+    { label: 'Churned', value: 'churned' }
+  ];
 
   const activeFilterLabel = filterOptions.find(f => f.value === activeFilter)?.label || 'All';
   const activeStatusLabel = statusOptions.find(f => f.value === statusFilter)?.label || 'All Status';
@@ -463,7 +449,10 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({ isOpen, onClose })
                 <span>Export</span>
               </button>
               
-              <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={() => setShowAddContactModal(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 <Plus className="w-4 h-4" />
                 <span>New Contact</span>
               </button>
@@ -671,6 +660,14 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({ isOpen, onClose })
           onUpdate={handleContactUpdate}
         />
       )}
+
+      {/* Add Contact Modal */}
+      <AddContactModal 
+        isOpen={showAddContactModal}
+        onClose={() => setShowAddContactModal(false)}
+        onSave={handleContactCreated}
+        selectAfterCreate={true}
+      />
     </>
   );
 };

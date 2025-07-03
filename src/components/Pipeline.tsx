@@ -12,7 +12,7 @@ import DealDetail from './DealDetail';
 import AddContactModal from './deals/AddContactModal';
 import { mockDeals, mockColumns, columnOrder, calculateStageValues } from '../data/mockDeals';
 import { Deal, PipelineColumn } from '../types';
-import { Search, Filter, Plus, BarChart3, Users, Grid as Grid3X3, List, Settings, Zap, Eye, EyeOff } from 'lucide-react';
+import { Search, Filter, Plus, BarChart3, Users, Grid3X3, List, Settings, Zap, Eye, EyeOff } from 'lucide-react';
 
 const Pipeline: React.FC = () => {
   const [deals, setDeals] = useState<Record<string, Deal>>(mockDeals);
@@ -30,12 +30,12 @@ const Pipeline: React.FC = () => {
 
   // Filter deals based on search and filters
   const filteredDeals = useMemo(() => {
-    let filtered = { ...deals };
+    let result = { ...deals };
 
-    // Apply search filter
-    if (searchTerm) {
-      filtered = Object.fromEntries(
-        Object.entries(filtered).filter(([_, deal]) =>
+    // Apply search
+    if (searchTerm.trim()) {
+      result = Object.fromEntries(
+        Object.entries(result).filter(([_, deal]) =>
           deal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           deal.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
           deal.contact.toLowerCase().includes(searchTerm.toLowerCase())
@@ -45,8 +45,8 @@ const Pipeline: React.FC = () => {
 
     // Apply advanced filters
     activeFilters.forEach(filter => {
-      filtered = Object.fromEntries(
-        Object.entries(filtered).filter(([_, deal]) => {
+      result = Object.fromEntries(
+        Object.entries(result).filter(([_, deal]) => {
           switch (filter.field) {
             case 'value':
               switch (filter.operator) {
@@ -77,7 +77,7 @@ const Pipeline: React.FC = () => {
       );
     });
 
-    return filtered;
+    return result;
   }, [deals, searchTerm, activeFilters]);
 
   // Update columns with filtered deals
@@ -531,7 +531,7 @@ const Pipeline: React.FC = () => {
                         ${deal.value.toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        <span className={`inline-flex px-2 py-1 text-xs leading-5 font-semibold rounded-full ${
                           deal.stage === 'qualification' ? 'bg-blue-100 text-blue-800' :
                           deal.stage === 'proposal' ? 'bg-indigo-100 text-indigo-800' :
                           deal.stage === 'negotiation' ? 'bg-purple-100 text-purple-800' :
