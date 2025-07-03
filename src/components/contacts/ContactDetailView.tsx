@@ -1,1325 +1,970 @@
 import React, { useState, useEffect } from 'react';
+import { Contact } from '../../types/contact';
+import { useContactStore } from '../../store/contactStore';
+import { AIInsightsPanel } from './AIInsightsPanel';
+import { ContactJourneyTimeline } from './ContactJourneyTimeline';
+import { CommunicationHub } from './CommunicationHub';
+import { ContactAnalytics } from './ContactAnalytics';
+import { AutomationPanel } from './AutomationPanel';
+import { useGamification } from '../../contexts/GamificationContext';
 import { AvatarWithStatus } from '../ui/AvatarWithStatus';
 import { ModernButton } from '../ui/ModernButton';
-import { CustomizableAIToolbar } from '../ui/CustomizableAIToolbar';
-import { AIResearchButton } from '../ui/AIResearchButton';
-import { aiEnrichmentService, ContactEnrichmentData } from '../../services/aiEnrichmentService';
-import { ContactJourneyTimeline } from './ContactJourneyTimeline';
-import { AIInsightsPanel } from './AIInsightsPanel';
-import { CommunicationHub } from './CommunicationHub';
-import { AutomationPanel } from './AutomationPanel';
-import { ContactAnalytics } from './ContactAnalytics';
-import { Contact } from '../../types/contact';
-import { 
-  X, Edit, Mail, Phone, Plus, MessageSquare, FileText, Calendar, MoreHorizontal, 
-  User, Globe, Clock, Building, Tag, Star, ExternalLink, Brain, TrendingUp, 
-  BarChart3, Zap, Users, Activity, Settings, Database, Shield, Target, 
-  Smartphone, Video, Linkedin, Twitter, Facebook, Instagram, Save, 
-  Ambulance as Cancel, Heart, HeartOff, MapPin, Briefcase, Award, 
-  CheckCircle, AlertCircle, Wifi, WifiOff, Search, DollarSign, RefreshCw,
-  Sparkles, Camera, Wand2
+import {
+  X,
+  Edit,
+  Mail,
+  Phone,
+  Building2,
+  Tag,
+  Save,
+  Plus,
+  UserPlus,
+  UserMinus,
+  Briefcase,
+  MapPin,
+  Globe,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  BarChart2,
+  MessageSquare,
+  Zap,
+  FileText,
+  Target,
+  Sparkles,
+  Brain,
+  Crown,
+  Star,
+  Award,
+  Trophy
 } from 'lucide-react';
 
 interface ContactDetailViewProps {
   contact: Contact;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate?: (id: string, updates: Partial<Contact>) => Promise<Contact>;
+  onUpdate: (id: string, updates: Partial<Contact>) => Promise<any>;
 }
 
-const interestColors = {
-  hot: 'bg-red-500',
-  medium: 'bg-yellow-500',
-  low: 'bg-blue-500',
-  cold: 'bg-gray-400'
-};
-
-const interestLabels = {
-  hot: 'Hot Client',
-  medium: 'Medium Interest',
-  low: 'Low Interest',
-  cold: 'Non Interest'
-};
-
-const sourceColors: { [key: string]: string } = {
-  'LinkedIn': 'bg-blue-600',
-  'Facebook': 'bg-blue-500',
-  'Email': 'bg-green-500',
-  'Website': 'bg-purple-500',
-  'Referral': 'bg-orange-500',
-  'Typeform': 'bg-pink-500',
-  'Cold Call': 'bg-gray-600'
-};
-
-const socialPlatforms = [
-  { icon: MessageSquare, color: 'bg-green-500', name: 'WhatsApp', key: 'whatsapp' },
-  { icon: Linkedin, color: 'bg-blue-500', name: 'LinkedIn', key: 'linkedin' },
-  { icon: Mail, color: 'bg-blue-600', name: 'Email', key: 'email' },
-  { icon: Twitter, color: 'bg-blue-400', name: 'Twitter', key: 'twitter' },
-  { icon: Facebook, color: 'bg-blue-700', name: 'Facebook', key: 'facebook' },
-  { icon: Instagram, color: 'bg-pink-500', name: 'Instagram', key: 'instagram' },
-];
-
-export const ContactDetailView: React.FC<ContactDetailViewProps> = ({ 
-  contact, 
-  isOpen, 
-  onClose, 
-  onUpdate 
+export const ContactDetailView: React.FC<ContactDetailViewProps> = ({
+  contact,
+  isOpen,
+  onClose,
+  onUpdate
 }) => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContact, setEditedContact] = useState<Contact>(contact);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showAddField, setShowAddField] = useState(false);
-  const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldValue, setNewFieldValue] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [isEnriching, setIsEnriching] = useState(false);
-  const [lastEnrichment, setLastEnrichment] = useState<ContactEnrichmentData | null>(null);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [socialFieldValue, setSocialFieldValue] = useState('');
-  const [showAddSocial, setShowAddSocial] = useState(false);
-  const [selectedSocialPlatform, setSelectedSocialPlatform] = useState('');
-  const [addSource, setAddSource] = useState('');
-  const [showAddSource, setShowAddSource] = useState(false);
-  const [editInterestLevel, setEditInterestLevel] = useState(false);
+  const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
+  const [formData, setFormData] = useState({ ...contact });
+  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'insights' | 'journey' | 'communication' | 'analytics' | 'automation'>('overview');
+  const [showTeamStats, setShowTeamStats] = useState(false);
+  const { addTeamMember, removeTeamMember, isTeamMember } = useGamification();
+
+  const handleAddToTeam = async () => {
+    try {
+      await addTeamMember(contact.id);
+      await onUpdate(contact.id, { 
+        isTeamMember: true,
+        role: 'sales-rep',
+        gamificationStats: {
+          totalDeals: 0,
+          totalRevenue: 0,
+          winRate: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+          level: 1,
+          points: 0,
+          achievements: [],
+          monthlyGoal: 50000,
+          monthlyProgress: 0
+        } 
+      });
+    } catch (error) {
+      console.error('Failed to add team member:', error);
+    }
+  };
+
+  const handleRemoveFromTeam = async () => {
+    try {
+      await removeTeamMember(contact.id);
+      await onUpdate(contact.id, { 
+        isTeamMember: false,
+        role: undefined,
+        gamificationStats: undefined
+      });
+    } catch (error) {
+      console.error('Failed to remove team member:', error);
+    }
+  };
 
   useEffect(() => {
-    setEditedContact(contact);
+    // Update form data when contact changes
+    setFormData({ ...contact });
   }, [contact]);
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: User },
-    { id: 'journey', label: 'Journey', icon: TrendingUp },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'communication', label: 'Communication', icon: MessageSquare },
-    { id: 'automation', label: 'Automation', icon: Zap },
-    { id: 'ai-insights', label: 'AI Insights', icon: Brain },
-  ];
-
-  const handleSave = async () => {
-    if (onUpdate) {
-      setIsSaving(true);
-      try {
-        await onUpdate(contact.id, editedContact);
-        setIsEditing(false);
-        setEditingField(null);
-      } catch (error) {
-        console.error('Failed to update contact:', error);
-      } finally {
-        setIsSaving(false);
-      }
-    }
+  const toggleEditMode = (field: string) => {
+    setEditMode(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
   };
 
-  const handleCancel = () => {
-    setEditedContact(contact);
-    setIsEditing(false);
-    setShowAddField(false);
-    setNewFieldName('');
-    setNewFieldValue('');
-    setEditingField(null);
-    setShowAddSocial(false);
-    setSocialFieldValue('');
-    setSelectedSocialPlatform('');
-    setShowAddSource(false);
-    setAddSource('');
-    setEditInterestLevel(false);
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
   };
 
-  const handleToggleFavorite = async () => {
-    const updatedContact = { ...editedContact, isFavorite: !editedContact.isFavorite };
-    setEditedContact(updatedContact);
-    
-    if (onUpdate) {
-      try {
-        await onUpdate(contact.id, { isFavorite: updatedContact.isFavorite });
-      } catch (error) {
-        console.error('Failed to update favorite status:', error);
-        // Revert on error
-        setEditedContact(prev => ({ ...prev, isFavorite: !updatedContact.isFavorite }));
-      }
-    }
-  };
-
-  const handleEditField = (field: string, value: any) => {
-    setEditedContact(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleStartEditingField = (field: string) => {
-    setEditingField(field);
-  };
-
-  const handleSaveField = async () => {
-    if (onUpdate && editingField) {
-      try {
-        const fieldValue = editedContact[editingField as keyof Contact];
-        await onUpdate(contact.id, { [editingField]: fieldValue });
-        setEditingField(null);
-      } catch (error) {
-        console.error('Failed to update field:', error);
-      }
-    }
-  };
-
-  const handleAddCustomField = () => {
-    if (newFieldName && newFieldValue) {
-      const updatedContact = {
-        ...editedContact,
-        customFields: {
-          ...(editedContact.customFields || {}),
-          [newFieldName]: newFieldValue
-        }
-      };
-      setEditedContact(updatedContact);
-      
-      if (onUpdate) {
-        onUpdate(contact.id, updatedContact)
-          .catch(error => console.error('Failed to add custom field:', error));
-      }
-      
-      setNewFieldName('');
-      setNewFieldValue('');
-      setShowAddField(false);
-    }
-  };
-
-  const handleRemoveCustomField = async (fieldName: string) => {
-    const customFields = { ...editedContact.customFields };
-    delete customFields[fieldName];
-    
-    const updatedContact = {
-      ...editedContact,
-      customFields
-    };
-    
-    setEditedContact(updatedContact);
-    
-    if (onUpdate) {
-      try {
-        await onUpdate(contact.id, { customFields });
-      } catch (error) {
-        console.error('Failed to remove custom field:', error);
-      }
-    }
-  };
-
-  const handleAddSocialProfile = () => {
-    if (selectedSocialPlatform && socialFieldValue) {
-      const socialProfiles = {
-        ...(editedContact.socialProfiles || {}),
-        [selectedSocialPlatform]: socialFieldValue
-      };
-      
-      const updatedContact = {
-        ...editedContact,
-        socialProfiles
-      };
-      
-      setEditedContact(updatedContact);
-      
-      if (onUpdate) {
-        onUpdate(contact.id, { socialProfiles })
-          .catch(error => console.error('Failed to add social profile:', error));
-      }
-      
-      setShowAddSocial(false);
-      setSelectedSocialPlatform('');
-      setSocialFieldValue('');
-    }
-  };
-
-  const handleAddSourceToContact = () => {
-    if (addSource && !editedContact.sources.includes(addSource)) {
-      const sources = [...editedContact.sources, addSource];
-      const updatedContact = {
-        ...editedContact,
-        sources
-      };
-      
-      setEditedContact(updatedContact);
-      
-      if (onUpdate) {
-        onUpdate(contact.id, { sources })
-          .catch(error => console.error('Failed to add source:', error));
-      }
-      
-      setShowAddSource(false);
-      setAddSource('');
-    }
-  };
-
-  const handleRemoveSource = async (source: string) => {
-    const sources = editedContact.sources.filter(s => s !== source);
-    const updatedContact = {
-      ...editedContact,
-      sources
-    };
-    
-    setEditedContact(updatedContact);
-    
-    if (onUpdate) {
-      try {
-        await onUpdate(contact.id, { sources });
-      } catch (error) {
-        console.error('Failed to remove source:', error);
-      }
-    }
-  };
-
-  const handleChangeInterestLevel = async (level: 'hot' | 'medium' | 'low' | 'cold') => {
-    const updatedContact = {
-      ...editedContact,
-      interestLevel: level
-    };
-    
-    setEditedContact(updatedContact);
-    
-    if (onUpdate) {
-      try {
-        await onUpdate(contact.id, { interestLevel: level });
-        setEditInterestLevel(false);
-      } catch (error) {
-        console.error('Failed to update interest level:', error);
-        setEditedContact(prev => ({ ...prev, interestLevel: contact.interestLevel }));
-      }
-    }
-  };
-
-  const handleAnalyzeContact = async () => {
-    setIsAnalyzing(true);
+  const handleSave = async (field: string) => {
+    setSaving(true);
     try {
-      // Simulate AI analysis
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const newScore = Math.floor(Math.random() * 40) + 60; // Random score between 60-100
-      const updatedContact = { ...editedContact, aiScore: newScore };
-      setEditedContact(updatedContact);
-      
-      if (onUpdate) {
-        await onUpdate(contact.id, { aiScore: newScore });
-      }
+      const updates = { [field]: formData[field as keyof Contact] };
+      await onUpdate(contact.id, updates);
+      toggleEditMode(field);
     } catch (error) {
-      console.error('Analysis failed:', error);
+      console.error('Failed to update contact:', error);
     } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleAIEnrichment = async (enrichmentData: ContactEnrichmentData) => {
-    setLastEnrichment(enrichmentData);
-    setIsEnriching(true);
-    
-    try {
-      // Apply enrichment data to contact
-      const updates: any = {};
-      
-      if (enrichmentData.phone && !editedContact.phone) {
-        updates.phone = enrichmentData.phone;
-      }
-      if (enrichmentData.industry && !editedContact.industry) {
-        updates.industry = enrichmentData.industry;
-      }
-      if (enrichmentData.avatar && enrichmentData.avatar !== editedContact.avatarSrc) {
-        updates.avatarSrc = enrichmentData.avatar;
-      }
-      if (enrichmentData.notes) {
-        updates.notes = editedContact.notes ? 
-          `${editedContact.notes}\n\nAI Research: ${enrichmentData.notes}` : 
-          enrichmentData.notes;
-      }
-      
-      // Social profiles
-      if (enrichmentData.socialProfiles) {
-        const socialUpdates: any = {};
-        Object.entries(enrichmentData.socialProfiles).forEach(([key, value]) => {
-          if (value && !editedContact.socialProfiles?.[key as keyof typeof editedContact.socialProfiles]) {
-            socialUpdates[key] = value;
-          }
-        });
-        if (Object.keys(socialUpdates).length > 0) {
-          updates.socialProfiles = { ...editedContact.socialProfiles, ...socialUpdates };
-        }
-      }
-      
-      // Update AI score if provided
-      if (enrichmentData.confidence) {
-        updates.aiScore = Math.round(enrichmentData.confidence);
-      }
-      
-      const updatedContact = { ...editedContact, ...updates };
-      setEditedContact(updatedContact);
-      
-      if (onUpdate && Object.keys(updates).length > 0) {
-        await onUpdate(contact.id, updates);
-      }
-      
-    } catch (error) {
-      console.error('Failed to apply enrichment:', error);
-    } finally {
-      setIsEnriching(false);
-    }
-  };
-
-  const handleFindNewImage = async () => {
-    try {
-      setIsEnriching(true);
-      const newImageUrl = await aiEnrichmentService.findContactImage(
-        editedContact.name,
-        editedContact.company
-      );
-      
-      const updatedContact = { ...editedContact, avatarSrc: newImageUrl };
-      setEditedContact(updatedContact);
-      
-      if (onUpdate) {
-        await onUpdate(contact.id, { avatarSrc: newImageUrl });
-      }
-    } catch (error) {
-      console.error('Failed to find new image:', error);
-    } finally {
-      setIsEnriching(false);
+      setSaving(false);
     }
   };
 
   if (!isOpen) return null;
 
+  // Helper to convert 'hot', 'medium', etc. to colors
+  const getInterestColor = (level: string) => {
+    switch (level) {
+      case 'hot': return 'bg-red-500';
+      case 'medium': return 'bg-yellow-500';
+      case 'low': return 'bg-blue-500';
+      case 'cold': return 'bg-gray-400';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'lead': return 'bg-yellow-500 text-white';
+      case 'prospect': return 'bg-blue-500 text-white';
+      case 'customer': return 'bg-green-500 text-white';
+      case 'inactive': return 'bg-red-500 text-white';
+      default: return 'bg-gray-500 text-white';
+    }
+  };
+
   return (
     <div 
-      className="fixed inset-0 bg-black/95 backdrop-blur-md z-[60] flex items-center justify-center p-2 animate-fade-in"
+      className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
       }}
     >
-      {/* Enlarged Modal Container */}
-      <div className="bg-white rounded-xl w-full max-w-[95vw] h-[95vh] overflow-hidden flex animate-scale-in shadow-2xl">
-        {/* Enhanced Customer Profile Sidebar */}
-        <div className="w-80 bg-gradient-to-b from-gray-50 via-white to-gray-50 border-r border-gray-200 flex flex-col h-full">
-          {/* Fixed Header with AI Features */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 flex-shrink-0">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center">
-              Customer Profile
-              <Sparkles className="w-4 h-4 ml-2 text-purple-500" />
-            </h2>
-            <div className="flex space-x-2">
-              <AIResearchButton
-                searchType="auto"
-                searchQuery={{
-                  email: editedContact.email,
-                  firstName: editedContact.firstName,
-                  lastName: editedContact.lastName,
-                  company: editedContact.company,
-                  linkedinUrl: editedContact.socialProfiles?.linkedin
-                }}
-                onDataFound={handleAIEnrichment}
-                variant="outline"
-                size="sm"
-                className="p-2 bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
-              />
-              <button
-                onClick={handleAnalyzeContact}
-                disabled={isAnalyzing}
-                className="p-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors disabled:opacity-50 relative"
-                title="AI Analysis"
-              >
-                <Brain className="w-4 h-4" />
-                {isAnalyzing && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  </div>
-                )}
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <div className="bg-white rounded-2xl w-full max-w-[95vw] max-h-[95vh] overflow-hidden flex animate-scale-in shadow-2xl">
+        {/* Left Side - Contact Profile */}
+        <div className="w-2/5 bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col max-h-[95vh]">
+          {/* Fixed Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white/50 backdrop-blur-sm">
+            <h2 className="text-xl font-bold text-gray-900">Contact Profile</h2>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Scrollable Content Area */}
-          <div className="flex-1 overflow-y-auto">
-            {/* Avatar and Basic Info with AI Enhancement */}
-            <div className="p-5 text-center border-b border-gray-100 bg-white">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Contact Avatar and Basic Info */}
+            <div className="text-center">
               <div className="relative inline-block mb-4">
                 <AvatarWithStatus
-                  src={editedContact.avatarSrc}
-                  alt={editedContact.name}
+                  src={contact.avatarSrc}
+                  alt={contact.name}
                   size="xl"
-                  status={editedContact.status}
+                  status={contact.status}
                 />
                 
-                {/* AI Score Badge */}
-                {editedContact.aiScore && (
-                  <div className={`absolute -top-1 -right-1 h-7 w-7 rounded-full ${
-                    editedContact.aiScore >= 80 ? 'bg-green-500' :
-                    editedContact.aiScore >= 60 ? 'bg-blue-500' :
-                    editedContact.aiScore >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                  } text-white flex items-center justify-center text-xs font-bold shadow-lg ring-2 ring-white`}>
-                    {editedContact.aiScore}
+                {/* Team Member Badge if applicable */}
+                {contact.isTeamMember && (
+                  <div className="absolute -top-2 -right-2 bg-indigo-600 text-white p-1 rounded-full shadow-lg">
+                    <Crown className="w-4 h-4" />
                   </div>
                 )}
                 
-                {/* Favorite Badge */}
-                {editedContact.isFavorite && (
-                  <div className="absolute -top-1 -left-1 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg ring-2 ring-white">
-                    <Heart className="w-3 h-3" />
+                {/* Favorite Badge if applicable */}
+                {contact.isFavorite && (
+                  <div className="absolute -top-2 -left-2 bg-red-500 text-white p-1 rounded-full shadow-lg">
+                    <Star className="w-4 h-4 fill-current" />
                   </div>
                 )}
                 
-                {/* AI Enhancement Indicator */}
-                {lastEnrichment && (
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-purple-500 text-white flex items-center justify-center shadow-lg ring-2 ring-white">
-                    <Sparkles className="w-2.5 h-2.5" />
-                  </div>
-                )}
-                
-                {/* AI Image Search Button */}
-                <button 
-                  onClick={handleFindNewImage}
-                  disabled={isEnriching}
-                  className="absolute -bottom-1 -right-1 p-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-full hover:from-purple-700 hover:to-blue-700 transition-colors shadow-lg relative"
-                >
-                  {isEnriching ? (
-                    <div className="animate-spin w-3 h-3 border border-white border-t-transparent rounded-full" />
-                  ) : (
-                    <Camera className="w-3 h-3" />
-                  )}
+                <button className="absolute -bottom-2 -right-2 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+                  <Edit className="w-3 h-3" />
                 </button>
               </div>
               
-              {/* Name and Title */}
-              <h3 className="text-xl font-bold text-gray-900 mb-2 leading-tight">{editedContact.name}</h3>
-              <p className="text-gray-600 font-medium mb-1">{editedContact.title}</p>
-              <p className="text-gray-500 text-sm">{editedContact.company}</p>
-              {editedContact.industry && (
-                <span className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                  {editedContact.industry}
-                </span>
-              )}
-              
-              {/* AI Enhancement Badge */}
-              {lastEnrichment && (
-                <div className="mt-3 p-2 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
-                  <div className="flex items-center justify-center space-x-2">
-                    <Sparkles className="w-3 h-3 text-purple-600" />
-                    <span className="text-xs font-medium text-purple-900">
-                      Enhanced with AI ({lastEnrichment.confidence}% confidence)
-                    </span>
+              {/* Contact Name */}
+              {editMode.name ? (
+                <div className="mb-4">
+                  <div className="flex space-x-2 mb-1">
+                    <input
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="First Name"
+                    />
+                    <input
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="Last Name"
+                    />
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* AI Tools Section - PROMINENTLY DISPLAYED */}
-            <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50">
-              <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center">
-                <Brain className="w-4 h-4 mr-2 text-purple-600" />
-                AI Assistant Tools
-              </h4>
-              
-              {/* AI Goals Button */}
-              <div className="mb-3">
-                <button className="w-full flex items-center justify-center py-3 px-4 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 text-sm font-medium transition-all duration-200 border border-indigo-300/50 shadow-sm hover:shadow-md hover:scale-105">
-                  <Target className="w-4 h-4 mr-2" />
-                  AI Goals
-                </button>
-              </div>
-
-              {/* Quick AI Actions Grid */}
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {/* Lead Score */}
-                <button 
-                  onClick={handleAnalyzeContact}
-                  className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 border-blue-300/50"
-                >
-                  <BarChart3 className="w-4 h-4 mb-1" />
-                  <span className="text-xs leading-tight text-center">Lead Score</span>
-                </button>
-                
-                {/* Email AI */}
-                <button className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 border-gray-200/50">
-                  <Mail className="w-4 h-4 mb-1" />
-                  <span className="text-xs leading-tight text-center">Email AI</span>
-                </button>
-                
-                {/* Enrich */}
-                <button className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 border-gray-200/50">
-                  <Search className="w-4 h-4 mb-1" />
-                  <span className="text-xs leading-tight text-center">Enrich</span>
-                </button>
-                
-                {/* Insights */}
-                <button className="p-3 flex flex-col items-center justify-center rounded-lg font-medium transition-all duration-200 border shadow-sm hover:shadow-md hover:scale-105 min-h-[3.5rem] bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 border-gray-200/50">
-                  <TrendingUp className="w-4 h-4 mb-1" />
-                  <span className="text-xs leading-tight text-center">Insights</span>
-                </button>
-              </div>
-
-              {/* AI Auto-Enrich Button */}
-              <button 
-                onClick={() => handleAIEnrichment(lastEnrichment || {})}
-                className="w-full flex items-center justify-center py-2 px-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 text-sm font-medium transition-all duration-200 border border-purple-300/50 shadow-sm hover:shadow-md hover:scale-105"
-              >
-                <Wand2 className="w-4 h-4 mr-2" />
-                AI Auto-Enrich
-                <Sparkles className="w-3 h-3 ml-2 text-yellow-300" />
-              </button>
-            </div>
-
-            {/* Quick Action Buttons */}
-            <div className="p-4 border-b border-gray-100 bg-white">
-              <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Zap className="w-4 h-4 mr-2 text-blue-500" />
-                Quick Actions
-              </h4>
-              <div className="grid grid-cols-3 gap-2">
-                <button 
-                  onClick={() => setIsEditing(true)}
-                  className="p-3 flex flex-col items-center hover:bg-blue-50 rounded-lg transition-all text-center"
-                >
-                  <Edit className="w-4 h-4 mb-1 text-blue-600" />
-                  <span className="text-xs font-medium">Edit</span>
-                </button>
-                <button className="p-3 flex flex-col items-center hover:bg-green-50 rounded-lg transition-all text-center">
-                  <Mail className="w-4 h-4 mb-1 text-green-600" />
-                  <span className="text-xs font-medium">Email</span>
-                </button>
-                <button className="p-3 flex flex-col items-center hover:bg-yellow-50 rounded-lg transition-all text-center">
-                  <Phone className="w-4 h-4 mb-1 text-yellow-600" />
-                  <span className="text-xs font-medium">Call</span>
-                </button>
-                <button 
-                  onClick={() => setShowAddField(true)}
-                  className="p-3 flex flex-col items-center hover:bg-purple-50 rounded-lg transition-all text-center"
-                >
-                  <Plus className="w-4 h-4 mb-1 text-purple-600" />
-                  <span className="text-xs font-medium">Add Field</span>
-                </button>
-                <button className="p-3 flex flex-col items-center hover:bg-orange-50 rounded-lg transition-all text-center">
-                  <FileText className="w-4 h-4 mb-1 text-orange-600" />
-                  <span className="text-xs font-medium">Files</span>
-                </button>
-                <button className="p-3 flex flex-col items-center hover:bg-indigo-50 rounded-lg transition-all text-center">
-                  <Calendar className="w-4 h-4 mb-1 text-indigo-600" />
-                  <span className="text-xs font-medium">Meet</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Contact Information */}
-            <div className="p-4 border-b border-gray-100 bg-white">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-gray-900 flex items-center">
-                  <User className="w-4 h-4 mr-2 text-blue-500" />
-                  Contact Info
-                </h4>
-                <button 
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {/* Email */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Mail className="w-3 h-3 text-green-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Email</p>
-                      {editingField === 'email' ? (
-                        <input
-                          type="email"
-                          value={editedContact.email}
-                          onChange={(e) => handleEditField('email', e.target.value)}
-                          className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                          onBlur={handleSaveField}
-                          autoFocus
-                        />
-                      ) : (
-                        <p className="text-sm font-medium text-gray-900 truncate">{editedContact.email}</p>
-                      )}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleStartEditingField('email')}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {/* Phone */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Phone className="w-3 h-3 text-yellow-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Phone</p>
-                      {editingField === 'phone' ? (
-                        <input
-                          type="tel"
-                          value={editedContact.phone || ''}
-                          onChange={(e) => handleEditField('phone', e.target.value)}
-                          className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                          onBlur={handleSaveField}
-                          autoFocus
-                        />
-                      ) : (
-                        <p className="text-sm font-medium text-gray-900">{editedContact.phone || '+91 120 222 313'}</p>
-                      )}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleStartEditingField('phone')}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {/* Company */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Building className="w-3 h-3 text-indigo-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Company</p>
-                      {editingField === 'company' ? (
-                        <input
-                          type="text"
-                          value={editedContact.company}
-                          onChange={(e) => handleEditField('company', e.target.value)}
-                          className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                          onBlur={handleSaveField}
-                          autoFocus
-                        />
-                      ) : (
-                        <p className="text-sm font-medium text-gray-900">{editedContact.company}</p>
-                      )}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleStartEditingField('company')}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {/* Social Media */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 bg-pink-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Globe className="w-3 h-3 text-pink-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Socials</p>
-                      <div className="flex space-x-1 mt-1">
-                        {socialPlatforms.slice(0, 4).map((social, index) => {
-                          const Icon = social.icon;
-                          const profileUrl = editedContact.socialProfiles?.[social.key];
-                          return (
-                            <div 
-                              key={index} 
-                              className={`${social.color} p-1 rounded-md text-white ${profileUrl ? '' : 'opacity-50'} hover:opacity-80 transition-opacity cursor-pointer`}
-                              title={profileUrl ? `${social.name}: ${profileUrl}` : `Add ${social.name}`}
-                              onClick={profileUrl ? undefined : () => {
-                                setShowAddSocial(true);
-                                setSelectedSocialPlatform(social.key);
-                              }}
-                            >
-                              <Icon className="w-2.5 h-2.5" />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setShowAddSocial(true)}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                </div>
-
-                {showAddSocial && (
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="mb-2">
-                      <label className="block text-xs text-gray-500 mb-1">Platform</label>
-                      <select
-                        value={selectedSocialPlatform}
-                        onChange={(e) => setSelectedSocialPlatform(e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                      >
-                        <option value="">Select platform...</option>
-                        {socialPlatforms.map((platform) => (
-                          <option key={platform.key} value={platform.key}>
-                            {platform.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="mb-2">
-                      <label className="block text-xs text-gray-500 mb-1">URL / Username</label>
-                      <input
-                        type="text"
-                        value={socialFieldValue}
-                        onChange={(e) => setSocialFieldValue(e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                        placeholder={selectedSocialPlatform === 'linkedin' ? 'https://linkedin.com/in/username' : ''}
-                      />
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={handleAddSocialProfile}
-                        disabled={!selectedSocialPlatform || !socialFieldValue}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium disabled:opacity-50"
-                      >
-                        Add
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowAddSocial(false);
-                          setSelectedSocialPlatform('');
-                          setSocialFieldValue('');
-                        }}
-                        className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-xs font-medium"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Last Connected - Full Text Visible */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-3 h-3 text-red-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Last Connected</p>
-                      <p className="text-sm font-medium text-gray-900 leading-tight">06/15/2023 at 7:16 pm</p>
-                    </div>
-                  </div>
-                  <button className="p-1 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Interest Level & Sources */}
-            <div className="p-4 bg-white">
-              <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                <Target className="w-4 h-4 mr-2 text-orange-500" />
-                Lead Information
-              </h4>
-              
-              {/* Interest Level */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Interest Level</p>
-                  <button 
-                    onClick={() => setEditInterestLevel(!editInterestLevel)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <Edit className="w-3 h-3" />
-                  </button>
-                </div>
-                {editInterestLevel ? (
-                  <div className="space-y-2 mb-2">
-                    {(['hot', 'medium', 'low', 'cold'] as const).map(level => (
-                      <button
-                        key={level}
-                        onClick={() => handleChangeInterestLevel(level)}
-                        className={`flex items-center space-x-2 w-full text-left p-2 rounded-lg ${
-                          editedContact.interestLevel === level 
-                            ? 'bg-blue-50 text-blue-700' 
-                            : 'hover:bg-gray-50 text-gray-700'
-                        }`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${interestColors[level]}`} />
-                        <span className="text-sm font-medium">{interestLabels[level]}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className={`w-2 h-2 rounded-full ${interestColors[editedContact.interestLevel]} animate-pulse`} />
-                      <span className="text-sm font-medium text-gray-900">{interestLabels[editedContact.interestLevel]}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      {Array.from({ length: 5 }, (_, i) => {
-                        const isActive = 
-                          (editedContact.interestLevel === 'hot' && i < 5) ||
-                          (editedContact.interestLevel === 'medium' && i < 3) ||
-                          (editedContact.interestLevel === 'low' && i < 2) ||
-                          (editedContact.interestLevel === 'cold' && i < 1);
-                        
-                        return (
-                          <div
-                            key={i}
-                            className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                              isActive 
-                                ? `${interestColors[editedContact.interestLevel]} shadow-sm` 
-                                : 'bg-gray-300'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Sources */}
-              <div className="pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Sources</p>
-                  <button 
-                    onClick={() => setShowAddSource(true)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {editedContact.sources.map((source, index) => (
-                    <div key={index} className="group relative">
-                      <span
-                        className={`
-                          ${sourceColors[source] || 'bg-gray-600'} 
-                          text-white text-xs px-2 py-1 rounded-md font-medium hover:opacity-90 transition-opacity cursor-pointer
-                        `}
-                      >
-                        {source}
-                      </span>
-                      <button 
-                        onClick={() => handleRemoveSource(source)}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full hidden group-hover:flex items-center justify-center"
-                      >
-                        <X className="w-2 h-2" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {showAddSource && (
-                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="mb-2">
-                      <input
-                        type="text"
-                        value={addSource}
-                        onChange={(e) => setAddSource(e.target.value)}
-                        placeholder="Add source..."
-                        className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                      />
-                    </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={handleAddSourceToContact}
-                        disabled={!addSource}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium disabled:opacity-50"
-                      >
-                        Add
-                      </button>
-                      <button
-                        onClick={() => setShowAddSource(false)}
-                        className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md text-xs font-medium"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    {/* Quick Source Suggestions */}
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {['LinkedIn', 'Website', 'Email', 'Cold Call', 'Referral'].map(source => (
-                        <button
-                          key={source}
-                          onClick={() => {
-                            setAddSource(source);
-                          }}
-                          className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md text-xs"
-                        >
-                          {source}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col h-full min-w-0">
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 bg-white flex-shrink-0">
-            <div className="flex items-center justify-between p-5">
-              <div className="flex space-x-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
+                  <div className="flex space-x-2">
                     <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`
-                        flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200
-                        ${activeTab === tab.id 
-                          ? 'bg-blue-100 text-blue-700 shadow-sm' 
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                        }
-                      `}
+                      onClick={() => toggleEditMode('name')}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
                     >
-                      <Icon className="w-4 h-4" />
-                      <span>{tab.label}</span>
+                      Cancel
                     </button>
-                  );
-                })}
-              </div>
+                    <button
+                      onClick={() => {
+                        handleInputChange('name', `${formData.firstName} ${formData.lastName}`);
+                        handleSave('name');
+                        handleSave('firstName');
+                        handleSave('lastName');
+                      }}
+                      disabled={saving}
+                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h4 className="text-xl font-semibold text-gray-900 mb-1 flex items-center justify-center space-x-2">
+                  <span>{contact.name}</span>
+                  <button
+                    onClick={() => toggleEditMode('name')}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <Edit className="w-3 h-3" />
+                  </button>
+                </h4>
+              )}
               
-              <div className="flex items-center space-x-3">
-                <ModernButton 
-                  variant={editedContact.isFavorite ? "primary" : "outline"} 
-                  size="sm" 
-                  onClick={handleToggleFavorite}
-                  className="flex items-center space-x-2"
-                >
-                  {editedContact.isFavorite ? <Heart className="w-4 h-4" /> : <HeartOff className="w-4 h-4" />}
-                  <span>{editedContact.isFavorite ? 'Favorited' : 'Add to Favorites'}</span>
-                </ModernButton>
-                
-                {isEditing ? (
-                  <div className="flex items-center space-x-2">
-                    <ModernButton 
-                      variant="primary" 
-                      size="sm" 
-                      onClick={handleSave}
-                      loading={isSaving}
-                      className="flex items-center space-x-2"
+              {/* Job Title & Company */}
+              {editMode.title ? (
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2"
+                    placeholder="Job Title"
+                  />
+                  <input
+                    type="text"
+                    value={formData.company}
+                    onChange={(e) => handleInputChange('company', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-2"
+                    placeholder="Company"
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => toggleEditMode('title')}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
                     >
-                      <Save className="w-4 h-4" />
-                      <span>Save</span>
-                    </ModernButton>
-                    <ModernButton 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleCancel}
-                      className="flex items-center space-x-2"
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleSave('title');
+                        handleSave('company');
+                      }}
+                      disabled={saving}
+                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
                     >
-                      <Cancel className="w-4 h-4" />
-                      <span>Cancel</span>
-                    </ModernButton>
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-600 text-sm flex items-center justify-center space-x-2">
+                    <span>{contact.title}</span>
+                    <button
+                      onClick={() => toggleEditMode('title')}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </button>
+                  </p>
+                  <p className="text-gray-500 text-sm">{contact.company}</p>
+                </>
+              )}
+              
+              {/* Status and Interest Level */}
+              <div className="mt-3 flex justify-center space-x-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contact.status)}`}>
+                  {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                </span>
+                <div className="flex items-center px-3 py-1 bg-gray-100 rounded-full">
+                  <div className={`w-2 h-2 rounded-full ${getInterestColor(contact.interestLevel)} mr-1`}></div>
+                  <span className="text-xs font-medium text-gray-700">
+                    {contact.interestLevel.charAt(0).toUpperCase() + contact.interestLevel.slice(1)} Interest
+                  </span>
+                </div>
+              </div>
+
+              {/* Team Member Actions */}
+              <div className="mt-4">
+                {contact.isTeamMember ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-center">
+                      <ModernButton
+                        variant="outline"
+                        onClick={() => setShowTeamStats(!showTeamStats)}
+                        className="text-indigo-600 border-indigo-300 hover:bg-indigo-50"
+                      >
+                        <Crown className="w-4 h-4 mr-2" />
+                        {showTeamStats ? 'Hide Team Stats' : 'Show Team Stats'}
+                      </ModernButton>
+                    </div>
+                    <div className="flex justify-center">
+                      <ModernButton
+                        variant="outline"
+                        onClick={handleRemoveFromTeam}
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                      >
+                        <UserMinus className="w-4 h-4 mr-2" />
+                        Remove from Team
+                      </ModernButton>
+                    </div>
                   </div>
                 ) : (
-                  <ModernButton 
-                    variant="primary" 
-                    size="sm" 
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center space-x-2"
+                  <ModernButton
+                    variant="primary"
+                    onClick={handleAddToTeam}
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
                   >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Contact</span>
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Add to Team
                   </ModernButton>
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto bg-gray-50 min-h-0">
-            {activeTab === 'overview' && (
-              <div className="p-6 space-y-6">
-                {/* AI Enhancement Notice */}
-                {lastEnrichment && (
-                  <div className="bg-gradient-to-r from-purple-50 via-blue-50 to-green-50 border border-purple-200 rounded-xl p-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-purple-500 rounded-lg">
-                        <Sparkles className="w-5 h-5 text-white" />
+            
+            {/* Team Member Stats (conditionally shown) */}
+            {contact.isTeamMember && showTeamStats && contact.gamificationStats && (
+              <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4 shadow-sm">
+                <h4 className="text-base font-semibold text-indigo-900 mb-4 flex items-center">
+                  <Trophy className="w-4 h-4 mr-2 text-indigo-600" />
+                  Team Performance
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                    <h5 className="text-xs font-medium text-indigo-800 mb-1 flex items-center">
+                      <Star className="w-3 h-3 mr-1 text-yellow-500" />
+                      Level {contact.gamificationStats.level}
+                    </h5>
+                    <div className="flex items-center">
+                      <div className="flex-1">
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div 
+                            className="bg-indigo-600 h-1.5 rounded-full"
+                            style={{ width: `${(contact.gamificationStats.points % 1000) / 10}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-purple-900">Contact Enhanced with AI Research</h4>
-                        <p className="text-purple-700 text-sm">
-                          This contact was enriched with additional information from OpenAI & Gemini research
-                        </p>
-                      </div>
+                      <span className="text-xs text-gray-600 ml-2">{contact.gamificationStats.points} pts</span>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                    <h5 className="text-xs font-medium text-indigo-800 mb-1">Win Rate</h5>
+                    <p className="text-lg font-bold text-indigo-900">{contact.gamificationStats.winRate}%</p>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                    <h5 className="text-xs font-medium text-indigo-800 mb-1">Total Deals</h5>
+                    <p className="text-lg font-bold text-indigo-900">{contact.gamificationStats.totalDeals}</p>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                    <h5 className="text-xs font-medium text-indigo-800 mb-1">Revenue</h5>
+                    <p className="text-lg font-bold text-indigo-900">${contact.gamificationStats.totalRevenue.toLocaleString()}</p>
+                  </div>
+                </div>
+                
+                {/* Monthly Target */}
+                {contact.gamificationStats.monthlyGoal && (
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                      <h5 className="text-xs font-medium text-indigo-800">Monthly Target</h5>
+                      <span className="text-xs text-indigo-900">
+                        ${(contact.gamificationStats.monthlyProgress || 0).toLocaleString()} / ${contact.gamificationStats.monthlyGoal.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full"
+                        style={{ width: `${Math.min(100, ((contact.gamificationStats.monthlyProgress || 0) / contact.gamificationStats.monthlyGoal) * 100)}%` }}
+                      />
                     </div>
                   </div>
                 )}
+                
+                {/* Achievements */}
+                {contact.gamificationStats.achievements.length > 0 && (
+                  <div>
+                    <h5 className="text-xs font-medium text-indigo-800 mb-2">Achievements</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {contact.gamificationStats.achievements.map((achievement, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full"
+                        >
+                          <Award className="w-3 h-3 mr-1 text-yellow-600" />
+                          {achievement === 'first-deal' ? 'First Deal' : 
+                           achievement === 'deal-streak-5' ? '5 Deal Streak' :
+                           achievement === 'revenue-milestone-100k' ? '$100K Revenue' :
+                           achievement === 'pipeline-master' ? 'Pipeline Master' :
+                           achievement}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-                {/* Personal Information */}
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <User className="w-5 h-5 mr-2 text-blue-500" />
-                      Personal Information
-                    </h4>
-                    <button 
-                      onClick={() => setIsEditing(!isEditing)}
-                      className="text-gray-400 hover:text-gray-600"
+            {/* Contact Details */}
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-4">Contact Details</h4>
+              
+              <div className="space-y-3">
+                {/* Email */}
+                {editMode.email ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-600">Email</label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    />
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => toggleEditMode('email')}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleSave('email')}
+                        disabled={saving}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                      >
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Mail className="w-5 h-5 text-blue-500 mr-3" />
+                      <div>
+                        <p className="text-sm text-gray-600">Email</p>
+                        <a 
+                          href={`mailto:${contact.email}`} 
+                          className="text-blue-600 hover:text-blue-800"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {contact.email}
+                        </a>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleEditMode('email')}
+                      className="p-1 text-gray-400 hover:text-gray-600"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { label: 'First Name', value: editedContact.firstName || editedContact.name.split(' ')[0], icon: User, field: 'firstName' },
-                      { label: 'Last Name', value: editedContact.lastName || editedContact.name.split(' ').slice(1).join(' '), icon: User, field: 'lastName' },
-                      { label: 'Email', value: editedContact.email, icon: Mail, field: 'email' },
-                      { label: 'Phone', value: editedContact.phone || 'Not provided', icon: Phone, field: 'phone' },
-                      { label: 'Title', value: editedContact.title, icon: Building, field: 'title' },
-                      { label: 'Company', value: editedContact.company, icon: Building, field: 'company' },
-                      { label: 'Industry', value: editedContact.industry || 'Not specified', icon: Tag, field: 'industry' },
-                      { label: 'Status', value: editedContact.status, icon: Activity, field: 'status' }
-                    ].map((field, index) => {
-                      const Icon = field.icon;
-                      return (
-                        <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                              <Icon className="w-4 h-4 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-700">{field.label}</p>
-                              {isEditing || editingField === field.field ? (
-                                <input
-                                  type="text"
-                                  value={editedContact[field.field as keyof Contact] as string || ''}
-                                  onChange={(e) => handleEditField(field.field, e.target.value)}
-                                  onBlur={() => editingField === field.field && handleSaveField()}
-                                  className="text-gray-900 bg-white border border-gray-300 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                              ) : (
-                                <p className="text-gray-900">{field.value}</p>
-                              )}
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => handleStartEditingField(field.field)}
-                            className="text-gray-400 hover:text-gray-600"
+                )}
+                
+                {/* Phone */}
+                {editMode.phone ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-600">Phone</label>
+                    <input
+                      type="tel"
+                      value={formData.phone || ''}
+                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    />
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => toggleEditMode('phone')}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleSave('phone')}
+                        disabled={saving}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                      >
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Phone className="w-5 h-5 text-green-500 mr-3" />
+                      <div>
+                        <p className="text-sm text-gray-600">Phone</p>
+                        {contact.phone ? (
+                          <a 
+                            href={`tel:${contact.phone}`} 
+                            className="text-green-600 hover:text-green-800"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Social Profiles */}
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <Globe className="w-5 h-5 mr-2 text-green-500" />
-                      Social Profiles
-                    </h4>
-                    <button 
-                      onClick={() => setShowAddSocial(true)} 
-                      className="text-gray-400 hover:text-gray-600"
+                            {contact.phone}
+                          </a>
+                        ) : (
+                          <p className="text-gray-500 italic">Not provided</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleEditMode('phone')}
+                      className="p-1 text-gray-400 hover:text-gray-600"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Edit className="w-4 h-4" />
                     </button>
                   </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {socialPlatforms.map((platform, index) => {
-                      const Icon = platform.icon;
-                      const profileUrl = editedContact.socialProfiles?.[platform.key];
-                      
-                      return (
-                        <div key={index} className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className={`${platform.color} p-2 rounded-lg`}>
-                            <Icon className="w-4 h-4 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">{platform.name}</p>
-                            {editingField === `social_${platform.key}` ? (
-                              <input
-                                type="text"
-                                value={editedContact.socialProfiles?.[platform.key] || ''}
-                                onChange={(e) => {
-                                  const socialProfiles = {
-                                    ...(editedContact.socialProfiles || {}),
-                                    [platform.key]: e.target.value
-                                  };
-                                  handleEditField('socialProfiles', socialProfiles);
-                                }}
-                                onBlur={handleSaveField}
-                                className="w-full text-xs border border-gray-300 rounded-md px-2 py-1"
-                                autoFocus
-                              />
-                            ) : profileUrl ? (
-                              <a href={profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate block">
-                                View Profile
-                              </a>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setShowAddSocial(true);
-                                  setSelectedSocialPlatform(platform.key);
-                                }}
-                                className="text-xs text-gray-500 hover:text-blue-600"
-                              >
-                                Add {platform.name}
-                              </button>
-                            )}
-                          </div>
-                          {profileUrl && (
-                            <button
-                              onClick={() => handleStartEditingField(`social_${platform.key}`)}
-                              className="text-gray-400 hover:text-gray-600"
+                )}
+                
+                {/* Company & Industry */}
+                {editMode.company ? (
+                  <div className="space-y-2">
+                    <label className="text-sm text-gray-600">Company & Industry</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={formData.company}
+                        onChange={(e) => handleInputChange('company', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Company"
+                      />
+                      <input
+                        type="text"
+                        value={formData.industry || ''}
+                        onChange={(e) => handleInputChange('industry', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+                        placeholder="Industry"
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => toggleEditMode('company')}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleSave('company');
+                          handleSave('industry');
+                        }}
+                        disabled={saving}
+                        className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                      >
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <Building2 className="w-5 h-5 text-purple-500 mr-3" />
+                      <div>
+                        <p className="text-sm text-gray-600">Company & Industry</p>
+                        <p className="text-gray-900">{contact.company} {contact.industry ? `• ${contact.industry}` : ''}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleEditMode('company')}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                
+                {/* Tags */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start">
+                    <Tag className="w-5 h-5 text-yellow-500 mr-3 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-gray-600">Tags</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {contact.tags && contact.tags.length > 0 ? (
+                          contact.tags.map((tag, index) => (
+                            <span 
+                              key={index}
+                              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
                             >
-                              <Edit className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-gray-500 italic">No tags</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleEditMode('tags')}
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Additional Information */}
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-4">Additional Information</h4>
+              
+              <div className="space-y-3">
+                {/* Sources */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Lead Sources</p>
+                  <div className="flex flex-wrap gap-2">
+                    {contact.sources.map((source, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full"
+                      >
+                        {source}
+                      </span>
+                    ))}
                   </div>
                 </div>
-
+                
+                {/* Last Connected */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Last Connected</p>
+                  <div className="flex items-center">
+                    <Clock className="w-4 h-4 text-gray-500 mr-2" />
+                    <p className="text-gray-900">{contact.lastConnected || 'No record'}</p>
+                  </div>
+                </div>
+                
                 {/* Custom Fields */}
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <Database className="w-5 h-5 mr-2 text-purple-500" />
-                      Custom Fields
-                    </h4>
-                    <button 
-                      onClick={() => setShowAddField(true)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <Plus className="w-4 h-4" />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm text-gray-600">Custom Fields</p>
+                    <button className="text-xs text-blue-600 hover:text-blue-800">
+                      <Plus className="w-3 h-3 inline mr-1" />
+                      Add Field
                     </button>
                   </div>
                   
-                  {editedContact.customFields && Object.keys(editedContact.customFields).length > 0 ? (
-                    <div className="space-y-3">
-                      {Object.entries(editedContact.customFields).map(([key, value], index) => (
-                        <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">{key}</p>
-                            {editingField === `custom_${key}` ? (
-                              <input
-                                type="text"
-                                value={String(editedContact.customFields?.[key] || '')}
-                                onChange={(e) => {
-                                  const customFields = {
-                                    ...(editedContact.customFields || {}),
-                                    [key]: e.target.value
-                                  };
-                                  handleEditField('customFields', customFields);
-                                }}
-                                onBlur={handleSaveField}
-                                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
-                                autoFocus
-                              />
-                            ) : (
-                              <p className="text-gray-900">{String(value)}</p>
-                            )}
-                          </div>
-                          <div className="flex space-x-2">
-                            <button 
-                              onClick={() => handleStartEditingField(`custom_${key}`)}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleRemoveCustomField(key)}
-                              className="text-gray-400 hover:text-red-600"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
+                  {contact.customFields && Object.keys(contact.customFields).length > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(contact.customFields).map(([key, value]) => (
+                        <div key={key} className="flex justify-between bg-gray-50 p-2 rounded-md">
+                          <span className="text-sm text-gray-600">{key}</span>
+                          <span className="text-sm text-gray-900">{value as string}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-gray-500 text-sm">No custom fields added</p>
-                  )}
-                  
-                  {showAddField && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          placeholder="Field name"
-                          value={newFieldName}
-                          onChange={(e) => setNewFieldName(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Field value"
-                          value={newFieldValue}
-                          onChange={(e) => setNewFieldValue(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <div className="flex space-x-3">
-                          <ModernButton 
-                            variant="primary" 
-                            size="sm" 
-                            onClick={handleAddCustomField}
-                          >
-                            Add Field
-                          </ModernButton>
-                          <ModernButton 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => setShowAddField(false)}
-                          >
-                            Cancel
-                          </ModernButton>
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-gray-500 italic text-sm">No custom fields</p>
                   )}
                 </div>
               </div>
-            )}
+            </div>
+            
+            {/* Notes */}
+            <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-gray-900">Notes</h4>
+                <button
+                  onClick={() => toggleEditMode('notes')}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+              </div>
+              
+              {editMode.notes ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={formData.notes || ''}
+                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    rows={5}
+                  />
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => toggleEditMode('notes')}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSave('notes')}
+                      disabled={saving}
+                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <p className="text-gray-700 whitespace-pre-line">
+                    {contact.notes || 'No notes for this contact.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
+        {/* Right Side - Detailed Information */}
+        <div className="flex-1 bg-white overflow-y-auto flex flex-col">
+          {/* Tabs Navigation */}
+          <div className="sticky top-0 bg-white z-10 border-b border-gray-200 px-6 py-3">
+            <div className="flex space-x-1">
+              {[
+                { id: 'overview', label: 'Overview', icon: FileText },
+                { id: 'insights', label: 'AI Insights', icon: Brain },
+                { id: 'journey', label: 'Journey', icon: Target },
+                { id: 'communication', label: 'Communication', icon: MessageSquare },
+                { id: 'analytics', label: 'Analytics', icon: BarChart2 },
+                { id: 'automation', label: 'Automation', icon: Zap }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center space-x-1 ${
+                    activeTab === tab.id 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {/* Tab Content */}
+          <div className="p-8 flex-1 overflow-y-auto">
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-6">Contact Overview</h3>
+                
+                {/* Contact Summary */}
+                <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <User className="w-5 h-5 mr-2 text-blue-500" />
+                    Contact Summary
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Full Name</p>
+                        <p className="text-lg text-gray-900">{contact.name}</p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Status</p>
+                        <div className="flex items-center mt-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contact.status)}`}>
+                            {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Interest Level</p>
+                        <div className="flex items-center mt-1">
+                          <div className={`w-2.5 h-2.5 rounded-full ${getInterestColor(contact.interestLevel)} mr-2`} />
+                          <span className="text-sm text-gray-900">
+                            {contact.interestLevel.charAt(0).toUpperCase() + contact.interestLevel.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Email</p>
+                        <a href={`mailto:${contact.email}`} className="text-blue-600 hover:text-blue-800">
+                          {contact.email}
+                        </a>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Phone</p>
+                        {contact.phone ? (
+                          <a href={`tel:${contact.phone}`} className="text-blue-600 hover:text-blue-800">
+                            {contact.phone}
+                          </a>
+                        ) : (
+                          <p className="text-gray-500 italic">Not provided</p>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Lead Source</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {contact.sources.map((source, index) => (
+                            <span key={index} className="inline-flex items-center px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                              {source}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Company Information */}
+                <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-sm mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <Building2 className="w-5 h-5 mr-2 text-purple-500" />
+                    Company Information
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Company Name</p>
+                      <p className="text-lg text-gray-900">{contact.company}</p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Industry</p>
+                      <p className="text-lg text-gray-900">{contact.industry || 'Not specified'}</p>
+                    </div>
+                    
+                    {/* If we had more company details, they would go here */}
+                  </div>
+                  
+                  {/* Company Website */}
+                  {contact.socialProfiles?.website && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm font-medium text-gray-700">Company Website</p>
+                      <a 
+                        href={contact.socialProfiles.website} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 flex items-center mt-1"
+                      >
+                        <Globe className="w-4 h-4 mr-2" />
+                        {contact.socialProfiles.website}
+                      </a>
+                    </div>
+                  )}
+                </div>
+                
+                {/* AI Enrichment */}
+                {contact.lastEnrichment && (
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200 shadow-sm mb-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Sparkles className="w-5 h-5 mr-2 text-purple-500" />
+                      AI Enrichment Details
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <Brain className="w-5 h-5 text-purple-600 mr-3" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">AI Confidence Score</p>
+                          <p className="text-lg text-gray-900">{contact.lastEnrichment.confidence}%</p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <div className="w-5 h-5 flex items-center justify-center mr-3">🤖</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">AI Provider</p>
+                          <p className="text-gray-900">{contact.lastEnrichment.aiProvider || 'AI Assistant'}</p>
+                        </div>
+                      </div>
+                      
+                      {contact.lastEnrichment.timestamp && (
+                        <div className="flex items-center">
+                          <Calendar className="w-5 h-5 text-blue-600 mr-3" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">Enrichment Date</p>
+                            <p className="text-gray-900">{contact.lastEnrichment.timestamp.toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Quick Actions */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  <button className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors flex items-center justify-center">
+                    <Mail className="w-5 h-5 mr-2" />
+                    Send Email
+                  </button>
+                  <button className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors flex items-center justify-center">
+                    <Phone className="w-5 h-5 mr-2" />
+                    Call
+                  </button>
+                  <button className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors flex items-center justify-center">
+                    <Calendar className="w-5 h-5 mr-2" />
+                    Schedule
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* AI Insights Tab */}
+            {activeTab === 'insights' && (
+              <AIInsightsPanel contact={contact} />
+            )}
+            
+            {/* Journey Tab */}
             {activeTab === 'journey' && (
-              <div className="p-6">
-                <ContactJourneyTimeline contact={editedContact} />
-              </div>
+              <ContactJourneyTimeline contact={contact} />
             )}
-
-            {activeTab === 'analytics' && (
-              <div className="p-6">
-                <ContactAnalytics contact={editedContact} />
-              </div>
-            )}
-
+            
+            {/* Communication Tab */}
             {activeTab === 'communication' && (
-              <div className="p-6">
-                <CommunicationHub contact={editedContact} />
-              </div>
+              <CommunicationHub contact={contact} />
             )}
-
+            
+            {/* Analytics Tab */}
+            {activeTab === 'analytics' && (
+              <ContactAnalytics contact={contact} />
+            )}
+            
+            {/* Automation Tab */}
             {activeTab === 'automation' && (
-              <div className="p-6">
-                <AutomationPanel contact={editedContact} />
-              </div>
-            )}
-
-            {activeTab === 'ai-insights' && (
-              <div className="p-6">
-                <AIInsightsPanel contact={editedContact} />
-              </div>
+              <AutomationPanel contact={contact} />
             )}
           </div>
         </div>

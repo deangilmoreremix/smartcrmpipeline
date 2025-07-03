@@ -9,6 +9,7 @@ import { FloatingActionPanel } from './ui/FloatingActionPanel';
 import { AdvancedFilter } from './ui/AdvancedFilter';
 import AddDealModal from './deals/AddDealModal';
 import DealDetail from './DealDetail';
+import AddContactModal from './deals/AddContactModal';
 import { mockDeals, mockColumns, columnOrder, calculateStageValues } from '../data/mockDeals';
 import { Deal, PipelineColumn } from '../types';
 import { 
@@ -34,6 +35,7 @@ const Pipeline: React.FC = () => {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [showContactsModal, setShowContactsModal] = useState(false);
   const [showAddDealModal, setShowAddDealModal] = useState(false);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [analyzingDealId, setAnalyzingDealId] = useState<string | null>(null);
@@ -572,6 +574,7 @@ const Pipeline: React.FC = () => {
           onViewContacts={() => setShowContactsModal(true)}
           onViewAnalytics={() => setShowAnalytics(!showAnalytics)}
           onSettings={() => console.log('Settings')}
+          onAddContact={() => setShowAddContactModal(true)}
         />
 
         {/* Modals */}
@@ -584,6 +587,13 @@ const Pipeline: React.FC = () => {
           isOpen={showAddDealModal}
           onClose={() => setShowAddDealModal(false)}
           onSave={handleAddDeal}
+        />
+
+        <AddContactModal
+          isOpen={showAddContactModal}
+          onClose={() => setShowAddContactModal(false)}
+          onSave={() => {}}
+          selectAfterCreate={true}
         />
 
         {selectedDealId && (
