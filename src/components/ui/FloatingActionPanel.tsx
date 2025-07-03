@@ -48,6 +48,25 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
     }
   };
 
+  // Function to handle deal click
+  const handleNewDeal = () => {
+    console.log("New Deal clicked");
+    if (onNewDeal) {
+      onNewDeal();
+    }
+    setIsExpanded(false);
+  };
+
+  // Function to handle contact add click
+  const handleAddContact = () => {
+    console.log("Add Contact clicked");
+    if (onAddContact) {
+      onAddContact();
+    }
+    setIsExpanded(false);
+    setShowContactActions(false);
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       <div className="flex flex-col items-end space-y-2">
@@ -56,7 +75,7 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
             {/* Quick Action Items */}
             <div className="p-2">
               <button
-                onClick={onNewDeal}
+                onClick={handleNewDeal}
                 className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors"
               >
                 <PlusCircle className="w-5 h-5 mr-3 text-blue-600" />
@@ -80,14 +99,19 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
                 {showContactActions && (
                   <div className="ml-8 space-y-1">
                     <button
-                      onClick={onViewContacts}
+                      onClick={() => {
+                        if (onViewContacts) {
+                          onViewContacts();
+                          setIsExpanded(false);
+                        }
+                      }}
                       className="w-full flex items-center p-2 hover:bg-gray-50 rounded-lg text-sm text-gray-700 transition-colors"
                     >
                       <Users className="w-4 h-4 mr-2 text-gray-500" />
                       View All
                     </button>
                     <button
-                      onClick={onAddContact}
+                      onClick={handleAddContact}
                       className="w-full flex items-center p-2 hover:bg-gray-50 rounded-lg text-sm text-gray-700 transition-colors"
                     >
                       <UserPlus className="w-4 h-4 mr-2 text-gray-500" />
@@ -98,7 +122,12 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
               </div>
 
               <button
-                onClick={onAIAnalysis}
+                onClick={() => {
+                  if (onAIAnalysis) {
+                    onAIAnalysis();
+                    setIsExpanded(false);
+                  }
+                }}
                 className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors"
               >
                 <Brain className="w-5 h-5 mr-3 text-purple-600" />
@@ -106,7 +135,12 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
               </button>
 
               <button
-                onClick={onViewAnalytics}
+                onClick={() => {
+                  if (onViewAnalytics) {
+                    onViewAnalytics();
+                    setIsExpanded(false);
+                  }
+                }}
                 className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors"
               >
                 <BarChart2 className="w-5 h-5 mr-3 text-green-600" />
@@ -114,7 +148,12 @@ export const FloatingActionPanel: React.FC<FloatingActionPanelProps> = ({
               </button>
 
               <button
-                onClick={onSettings}
+                onClick={() => {
+                  if (onSettings) {
+                    onSettings();
+                    setIsExpanded(false);
+                  }
+                }}
                 className="w-full flex items-center p-3 hover:bg-gray-50 rounded-lg text-sm font-medium text-gray-700 transition-colors"
               >
                 <Settings className="w-5 h-5 mr-3 text-gray-600" />
