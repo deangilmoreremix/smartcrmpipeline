@@ -11,7 +11,7 @@ import {
   Bot, 
   Search, 
   Users, 
-  Building, 
+  Building2, 
   Mail, 
   Phone, 
   MapPin, 
@@ -24,10 +24,10 @@ import {
   Brain, 
   UserPlus, 
   UserX,
-  Linkedin,
-  Twitter,
-  Facebook,
-  Instagram,
+  Linkedin as LinkedinIcon,
+  Twitter as TwitterIcon,
+  Facebook as FacebookIcon,
+  Instagram as InstagramIcon,
   MessageSquare,
   Globe,
   Plus,
@@ -244,6 +244,24 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
         notes: `Company research completed using ${companyData.aiProvider}. ${companyData.description}`
       }));
 
+      // If we have contact info from the company research, try to use that
+      if (formData.contact && companyData.keyExecutives?.length > 0) {
+        const matchingExecutive = companyData.keyExecutives.find(exec => 
+          exec.name.toLowerCase().includes(formData.contact.toLowerCase()) ||
+          formData.contact.toLowerCase().includes(exec.name.toLowerCase())
+        );
+        
+        if (matchingExecutive) {
+          setContactDetails(prev => ({
+            ...prev,
+            name: matchingExecutive.name,
+            title: matchingExecutive.title,
+            email: matchingExecutive.email || prev.email,
+            linkedin: matchingExecutive.linkedin || prev.linkedin,
+          }));
+        }
+      }
+
     } catch (error) {
       console.error('❌ AI research failed:', error);
       setAiInsights(['AI research failed. Please try again or enter details manually.']);
@@ -373,7 +391,7 @@ const AddDealModal: React.FC<AddDealModalProps> = ({ isOpen, onClose, onSave }) 
           {[
             { id: 'basic', label: 'Deal Info', icon: Target },
             { id: 'contact', label: 'Contact Details', icon: Users },
-            { id: 'company', label: 'Company Details', icon: Building },
+            { id: 'company', label: 'Company Details', icon: Building2 },
             { id: 'ai', label: 'AI Research', icon: Bot }
           ].map(tab => {
             const Icon = tab.icon;

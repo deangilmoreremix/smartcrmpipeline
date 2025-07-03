@@ -10,6 +10,7 @@ import { DealJourneyTimeline } from './deals/DealJourneyTimeline';
 import { DealCommunicationHub } from './deals/DealCommunicationHub';
 import { DealAnalyticsDashboard } from './deals/DealAnalyticsDashboard';
 import { DealAutomationPanel } from './deals/DealAutomationPanel';
+import { useAIResearch } from '../services/aiResearchService';
 import { 
   X, 
   Edit, 
@@ -118,6 +119,7 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
   const [contactDetail, setContactDetail] = useState<Contact | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'insights' | 'journey' | 'communication' | 'analytics' | 'automation'>('overview');
   const [isLoadingContact, setIsLoadingContact] = useState(false);
+  const aiResearch = useAIResearch();
 
   // Fetch contact details if we have a contactId
   React.useEffect(() => {
@@ -227,7 +229,7 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
           probability: newProbability,
           lastEnrichment: {
             confidence: newProbability,
-            aiProvider: 'GPT-4o / Gemini Hybrid',
+            aiProvider: 'Hybrid AI (GPT-4o / Gemini)',
             timestamp: new Date()
           }
         };
@@ -247,18 +249,50 @@ export const DealDetailView: React.FC<DealDetailViewProps> = ({
   const handleAIEnrich = async () => {
     setIsEnriching(true);
     try {
-      // Simulate AI enrichment with a delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Call the AI research service to get detailed company information
+      const companyData = await aiResearch.researchCompany(deal.company);
+      
+      // Extract key information from research results
+      const researchNotes = `
+AI Research (${new Date().toLocaleString()}):
+Company: ${companyData.name} - ${companyData.industry}
+Description: ${companyData.description}
+Revenue: ${companyData.revenue}
+Headquarters: ${companyData.headquarters}
+Key Decision Makers: ${companyData.keyDecisionMakers.join(', ')}
+Potential Needs: ${companyData.potentialNeeds.join(', ')}
+Recommended Approach: ${companyData.salesApproach}
+      `.trim();
+      
+      // Find contact person information if available
+      let contactNotes = '';
+      if (deal.contact) {
+        try {
+          const contactData = await aiResearch.findContactPerson(deal.contact, deal.company);
+          contactNotes = `
+Contact Research:
+${contactData.name} (${contactData.title})
+Strategy: ${contactData.contactStrategy}
+Value Proposition: ${contactData.valueProposition}
+Communication Style: ${contactData.communicationStyle}
+          `.trim();
+        } catch (error) {
+          console.error('Contact research failed:', error);
+        }
+      }
+      
+      // Combine research notes
+      const combinedNotes = deal.notes 
+        ? `${deal.notes}\n\n${researchNotes}${contactNotes ? '\n\n' + contactNotes : ''}` 
+        : `${researchNotes}${contactNotes ? '\n\n' + contactNotes : ''}`;
       
       if (onUpdate) {
         const updates: Partial<Deal> = {
           probability: Math.min(deal.probability + 20, 98),
-          notes: deal.notes 
-            ? `${deal.notes}\n\nAI Research (${new Date().toLocaleString()}): ${deal.company} is expanding operations in Q3 with increased budget for solutions like ours. Key decision maker is ${deal.contact}, who is primarily concerned with implementation timeline and ROI metrics.` 
-            : `AI Research (${new Date().toLocaleString()}): ${deal.company} is expanding operations in Q3 with increased budget for solutions like ours. Key decision maker is ${deal.contact}, who is primarily concerned with implementation timeline and ROI metrics.`,
+          notes: combinedNotes,
           lastEnrichment: {
             confidence: 85,
-            aiProvider: 'Comprehensive AI Research',
+            aiProvider: companyData.aiProvider || 'Comprehensive AI Research',
             timestamp: new Date()
           }
         };
